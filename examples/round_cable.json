@@ -1,0 +1,34 @@
+{
+  "api_version": "1.0",
+  "plugin_id": "cable.round",
+  "parameters": {
+    "asset_id": "demo.round.mv",
+    "length_m": 1.0,
+    "conductor": {
+      "radius_m": 0.01,
+      "material_ref": "material:copper",
+      "representation": "solid_equivalent"
+    },
+    "layers": [
+      {
+        "id": "insulation",
+        "role": "insulation",
+        "thickness_m": 0.005,
+        "material_ref": "material:xlpe",
+        "representation": "continuous_annulus"
+      },
+      {
+        "id": "sheath",
+        "role": "sheath",
+        "thickness_m": 0.002,
+        "material_ref": "material:pe",
+        "representation": "continuous_annulus"
+      }
+    ]
+  },
+  "outputs": ["step"],
+  "provenance": {
+    "source_type": "synthetic_demo",
+    "notes": "Reconstruction CI fixture; not a manufacturer product specification."
+  }
+}
