@@ -1,27 +1,70 @@
-name: Mesh bridge (provided, not remotely executed)
+name: Simulation prep mesh bridge
+
 on:
   workflow_dispatch:
   push:
-    paths: ['extensions/simulation-prep/**', 'mesh_lab/**', '.github/workflows/mesh-bridge.yml']
+    paths:
+      - 'extensions/simulation-prep/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/mesh-bridge.yml'
+  pull_request:
+    paths:
+      - 'extensions/simulation-prep/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/mesh-bridge.yml'
+
+permissions:
+  contents: read
+
 jobs:
   native-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
-      - run: pip install '.[occt]' ./extensions/section-profile ./extensions/engineering-gate './extensions/simulation-prep[mesh,verify]' pytest
-      - run: python mesh_lab/make_test_fixture.py out/ci-source
-      - run: python -m pytest extensions/simulation-prep/tests --import-mode=importlib --junitxml=out/prep-tests.xml
+
+      - name: Install native runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+
+      - name: Install reconstructed geometry and preparation stack
+        run: python -m pip install -e '.[occt]' -e extensions/section-profile -e extensions/engineering-gate -e 'extensions/simulation-prep[mesh,verify]' pytest
+
+      - name: Build an accepted source fixture
+        run: python mesh_lab/make_test_fixture.py out/ci-source
+
+      - name: Test preparation contracts and native Gmsh transfer
         env:
           MODELKIT_PREP_SOURCE: '${{ github.workspace }}/out/ci-source/candidate'
-          PYTHONPATH: '${{ github.workspace }}'
-          OMP_NUM_THREADS: '1'
-          OPENBLAS_NUM_THREADS: '1'
+        run: python scripts/run_pytest_ci.py -q extensions/simulation-prep/tests --junitxml=out/prep-tests.xml
+
+      - name: Produce retained preparation evidence
+        run: cable-modelkit-prep prepare out/ci-source/candidate out/prepared --mesh --verify-mesh
+
+      - name: Independently re-check preparation manifest
+        run: cable-modelkit-prep verify out/prepared
+
+      - name: Pin conservative qualification boundary
+        run: >-
+          python -c "import json; from pathlib import Path;
+          d=json.loads(Path('out/prepared/simulation-prep.json').read_text(encoding='utf-8'));
+          assert len(d['domains'])==4; assert d['mesh_topology']=='independent-volume-import';
+          assert d['conformal_shared_topology'] is False; assert d['fem_ready'] is False;
+          assert d['simulation_ready'] is False; assert d['manufacturing_ready'] is False;
+          assert d['node_count']>0 and d['volume_element_count']>0;
+          print('simulation-prep domain transfer passed without FEM overclaim')"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: mesh-bridge-tests
-          path: out/prep-tests.xml
+          name: simulation-prep-evidence
+          path: out/
