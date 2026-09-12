@@ -13,7 +13,7 @@ Only after those checks pass does the report set:
 - `output_topology = "fragmented-shared"`
 - `conformal_shared_topology = true`
 
-The emitted mesh remains Gmsh MSH 4.1 in millimeters, matching the Core B-rep coordinate convention.
+The emitted mesh remains Gmsh MSH 4.1 in millimeters, matching the Core B-rep coordinate convention. The native proof path pins single-threaded HXT and derives a bounded mesh-size interval from retained OpenCASCADE mass properties: the smallest per-volume hydraulic thickness controls the maximum size, while the full-model bounding-box diagonal supplies explicit resolution floors and ceilings. Geometry below the generic proof resolution floor fails closed instead of being silently under-resolved.
 
 ## What this does not prove
 
