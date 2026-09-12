@@ -1,0 +1,27 @@
+name: Mesh bridge (provided, not remotely executed)
+on:
+  workflow_dispatch:
+  push:
+    paths: ['extensions/simulation-prep/**', 'mesh_lab/**', '.github/workflows/mesh-bridge.yml']
+jobs:
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+      - run: pip install '.[occt]' ./extensions/section-profile ./extensions/engineering-gate './extensions/simulation-prep[mesh,verify]' pytest
+      - run: python mesh_lab/make_test_fixture.py out/ci-source
+      - run: python -m pytest extensions/simulation-prep/tests --import-mode=importlib --junitxml=out/prep-tests.xml
+        env:
+          MODELKIT_PREP_SOURCE: '${{ github.workspace }}/out/ci-source/candidate'
+          PYTHONPATH: '${{ github.workspace }}'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mesh-bridge-tests
+          path: out/prep-tests.xml

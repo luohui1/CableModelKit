@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit"
+version = "0.2.1"
+description = "Independent, headless OCCT geometry plugins for cable engineering assets"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = ["pydantic==2.13.4"]
+
+[project.optional-dependencies]
+occt = ["cadquery==2.8.0", "cadquery-ocp==7.9.3.1.1"]
+dev = ["pytest>=9,<10", "ruff>=0.12,<1", "jsonschema>=4.20,<5", "trimesh>=4.5,<5"]
+
+[project.scripts]
+cable-modelkit = "cable_modelkit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cable_modelkit = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

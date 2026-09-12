@@ -1,0 +1,28 @@
+name: Mesh quality (configured, not remotely verified)
+on:
+  workflow_dispatch:
+  push:
+    paths: ['extensions/mesh-quality/**', 'quality_lab/**', '.github/workflows/mesh-quality.yml']
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+      - run: pip install '.[occt]' ./extensions/section-profile ./extensions/engineering-gate './extensions/simulation-prep[mesh,verify,gmsh]' './extensions/mesh-quality[quality,exchange]' pytest
+      - run: python -m pytest extensions/mesh-quality/tests --import-mode=importlib --junitxml=out/quality.xml
+        env:
+          PYTHONPATH: '${{ github.workspace }}'
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+      - run: python -m quality_lab.gmsh_smoke out/gmsh-smoke
+        env:
+          OMP_NUM_THREADS: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-and-gmsh-evidence
+          path: out/

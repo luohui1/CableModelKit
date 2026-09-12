@@ -1,0 +1,36 @@
+name: open-reference
+on:
+  push:
+    paths:
+      - 'extensions/open-reference/**'
+      - 'reference_lab/**'
+      - '.github/workflows/open-reference.yml'
+  pull_request:
+    paths:
+      - 'extensions/open-reference/**'
+      - 'reference_lab/**'
+      - '.github/workflows/open-reference.yml'
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e . -e extensions/product-baseline -e extensions/open-reference pytest
+      - run: pytest -q extensions/open-reference/tests
+
+  gmsh-native-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip
+      - run: pip install 'gmsh==4.15.2'
+      - run: python reference_lab/gmsh_probe.py reference_lab/evidence/gmsh-native-ci.json

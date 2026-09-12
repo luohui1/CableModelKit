@@ -1,0 +1,163 @@
+{
+  "archive_anomalies_observed": [
+    "chunk-12: 4 base64 chars short of nominal span to chunk-15"
+  ],
+  "compressed_bytes": 18000,
+  "file_count": 23,
+  "files": [
+    {
+      "path": ".github/workflows/open-reference.yml",
+      "sha256": "cc7acd6d8fd901193b77b9c3490e9128aabe731b488609af2e331a9c2459a10f",
+      "size": 1062,
+      "tar_offset": 1536
+    },
+    {
+      "path": ".github/workflows/engineering-gate.yml",
+      "sha256": "2adae7d48abc6347a531b6abfba63eeb8e2c3e09d4a7dcf3337377c38e2a7d41",
+      "size": 1359,
+      "tar_offset": 3584
+    },
+    {
+      "path": ".github/workflows/runtime-link.yml",
+      "sha256": "77df68f31d6519f95544123c58fe47c1608b85c7c594464d32fe59bef5ded50b",
+      "size": 1318,
+      "tar_offset": 5632
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "c96fc33a4ae33272931275910039f9ede96df9a2d514dda63307830a9328ba09",
+      "size": 1939,
+      "tar_offset": 7680
+    },
+    {
+      "path": ".github/workflows/mesh-quality.yml",
+      "sha256": "2f7ad0d94b3164fbcf81b20a538f29f689adaa6da622c19516ec2005e5b93b95",
+      "size": 1131,
+      "tar_offset": 10240
+    },
+    {
+      "path": ".github/workflows/mesh-bridge.yml",
+      "sha256": "c4f41f47c4c7fb8c4e6a2c273dae98035a88a2c0396b36dba5bbfb73eb94c432",
+      "size": 1134,
+      "tar_offset": 12288
+    },
+    {
+      "path": ".github/workflows/product-baseline.yml",
+      "sha256": "8f423c00545f40506eb6c5ebfad83c16f945d06277c4e075fbb08cefb5e7e10c",
+      "size": 1102,
+      "tar_offset": 14336
+    },
+    {
+      "path": ".github/workflows/reference-factory.yml",
+      "sha256": "4fc3f82dafddeee4569e9bd3a3bb563fd879ce503a332be0d1bc0cb5e92b7db1",
+      "size": 2862,
+      "tar_offset": 16384
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "sha256": "83945324115ac4e71463c734a5034f46262bfd05e611233c7ace4152453cc5e3",
+      "size": 782,
+      "tar_offset": 19968
+    },
+    {
+      "path": ".gitattributes",
+      "sha256": "6881a7db227daa0f154f30f6e9c04152cacf5c7d1102708ff59a8de59eab770f",
+      "size": 141,
+      "tar_offset": 21504
+    },
+    {
+      "path": "LICENSE_STATUS.md",
+      "sha256": "49a06362926595225d1aae7a5d7654c5dc93f7d735e3207e754626af52e8e426",
+      "size": 420,
+      "tar_offset": 22528
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "f656ab965e1af6e5a8458771387a8b7a47919052a2260b9ecc5527b65def419a",
+      "size": 856,
+      "tar_offset": 23552
+    },
+    {
+      "path": "README.md",
+      "sha256": "39cda22630086434f9ddafcc511386a1340e086776db38f40b6d3abd51c299e6",
+      "size": 5882,
+      "tar_offset": 25088
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "9f989babbed523e22b873927916a256f42f2d074b42100306889c54e2abbf56d",
+      "size": 766,
+      "tar_offset": 31744
+    },
+    {
+      "path": "src/cable_modelkit/py.typed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0,
+      "tar_offset": 34304
+    },
+    {
+      "path": "src/cable_modelkit/__init__.py",
+      "sha256": "8b362e92dfc4d82e58849c8db51d35e1845882a163a2ac7115abb3055e44087a",
+      "size": 122,
+      "tar_offset": 34816
+    },
+    {
+      "path": "src/cable_modelkit/gltf.py",
+      "sha256": "430b64acbed4e62c917904f5d78213aef2b76ec5473e84c7531c086460e37511",
+      "size": 5249,
+      "tar_offset": 35840
+    },
+    {
+      "path": "src/cable_modelkit/schema.py",
+      "sha256": "c00afb1c9a94dfbcc77ddccd810e4c5a8492693565ea2416e505330003ad58bb",
+      "size": 5252,
+      "tar_offset": 41984
+    },
+    {
+      "path": "src/cable_modelkit/engine.py",
+      "sha256": "6cf3342d6c9477fe67e9b5ebbd95db6ae36d3604b1afb2c747fb7e87ef8ffe59",
+      "size": 6249,
+      "tar_offset": 48128
+    },
+    {
+      "path": "src/cable_modelkit/exporters.py",
+      "sha256": "fa1b53e366688634465806ce84dc822f9e9c0cbfc6c399cd800baea943d0378b",
+      "size": 4909,
+      "tar_offset": 55296
+    },
+    {
+      "path": "src/cable_modelkit/errors.py",
+      "sha256": "268437673399426b1b2575e1dad3f0e39ace18ecdd68cdd37d1448fbb76225c0",
+      "size": 309,
+      "tar_offset": 60928
+    },
+    {
+      "path": "src/cable_modelkit/plugins/__init__.py",
+      "sha256": "4b9149b430d2f1ad5bee6b8f9b6160082ecf6b88b45fe844841d84bfe4042dd5",
+      "size": 90,
+      "tar_offset": 62464
+    },
+    {
+      "path": "src/cable_modelkit/plugins/infrastructure.py",
+      "sha256": "99ae9ffb328766be076a1c9d3aacd2317c1af505200e8886817ebd2066e921b0",
+      "size": 7182,
+      "tar_offset": 63488
+    }
+  ],
+  "first_incomplete_entry": "./src/cable_modelkit/plugins/duct_bank.py",
+  "inflated_tar_bytes": 74580,
+  "logical_gaps_observed": [
+    {
+      "end": 7,
+      "start": 4
+    }
+  ],
+  "source_chunks": [
+    "chunk-00",
+    "chunk-01",
+    "chunk-02",
+    "chunk-03"
+  ],
+  "status": "proven-prefix-only",
+  "tar_stop": "prefix ends inside tar entry"
+}

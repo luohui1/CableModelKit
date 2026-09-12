@@ -1,0 +1,37 @@
+name: Scoped engineering geometry gate
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['extensions/engineering-gate/**', 'extensions/section-profile/**', '.github/workflows/engineering-gate.yml']
+permissions:
+  contents: read
+jobs:
+  geometry:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.12', '3.13']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install pinned geometry runtime and optional gate
+        run: python -m pip install -e '.[occt,dev]' -e extensions/section-profile -e extensions/engineering-gate
+      - name: Tests and bytecode
+        run: |
+          python -m compileall -q extensions/engineering-gate/src
+          python -m pytest extensions/engineering-gate/tests -q --junitxml=out/gate-tests.xml
+      - name: Build and accept real 22-domain sample
+        run: cable-modelkit-gate build extensions/section-profile/examples/profiled-19.json out/profiled-core
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: engineering-gate-${{ matrix.os }}-${{ matrix.python }}
+          path: out/

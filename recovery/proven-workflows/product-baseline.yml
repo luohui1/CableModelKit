@@ -1,0 +1,31 @@
+name: Optional product baseline alpha
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install core and optional baseline
+        run: python -m pip install -e ".[occt,dev]" -e extensions/product-baseline
+      - name: Check baseline schemas and Python
+        run: |
+          python product_lab/export_schemas.py --check
+          python -m compileall -q extensions/product-baseline/src product_lab
+      - name: Test evidence, preview, geometry and transactional export
+        run: python -m pytest -q extensions/product-baseline/tests --junitxml=artifacts/product-baseline.xml
+      - name: Export audited example assets
+        run: python product_lab/build_assets.py --output artifacts/product-baseline-assets
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: product-baseline-alpha
+          path: artifacts/
