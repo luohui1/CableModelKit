@@ -9,9 +9,9 @@ They require explicit source/licensing metadata and leaf-level parameter evidenc
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, JsonValue, Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, JsonValue, model_validator
 
 from cable_modelkit.schema import Contract, Id
 
