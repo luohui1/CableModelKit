@@ -9,10 +9,35 @@ from pathlib import Path
 
 from cable_modelkit_mesh_quality import write_quality_report
 from cable_modelkit_simulation_prep import PrepManifest, PreparedDomain
+from cable_modelkit_simulation_prep.prep import _gmsh_mesh
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_smoke_brep(target: Path) -> Path:
+    """Create a synthetic B-rep that is subsequently meshed by the real prep path."""
+
+    import gmsh  # type: ignore
+
+    brep_path = target / "synthetic-smoke.brep"
+    initialized = False
+    try:
+        gmsh.initialize(["cmk-mesh-quality-smoke-source", "-v", "0"])
+        initialized = True
+        gmsh.option.setNumber("General.Terminal", 0)
+        gmsh.model.add("cmk-quality-smoke-source")
+        gmsh.model.occ.addBox(0.0, 0.0, 0.0, 10.0, 10.0, 10.0)
+        gmsh.model.occ.synchronize()
+        gmsh.write(str(brep_path))
+    finally:
+        if initialized:
+            gmsh.finalize()
+
+    if not brep_path.is_file() or brep_path.stat().st_size <= 0:
+        raise RuntimeError("quality smoke failed to retain its synthetic B-rep")
+    return brep_path
 
 
 def main() -> int:
@@ -24,31 +49,21 @@ def main() -> int:
         raise SystemExit(f"refusing to overwrite smoke directory: {target}")
     target.mkdir(parents=True)
 
-    import gmsh  # type: ignore
-
-    initialized = False
-    try:
-        gmsh.initialize(["cmk-mesh-quality-smoke", "-v", "0"])
-        initialized = True
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("cmk-quality-smoke")
-        volume = gmsh.model.occ.addBox(0.0, 0.0, 0.0, 10.0, 10.0, 10.0)
-        gmsh.model.occ.synchronize()
-        physical = gmsh.model.addPhysicalGroup(3, [volume])
-        gmsh.model.setPhysicalName(3, physical, "domain/smoke")
-        gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
-        gmsh.option.setNumber("Mesh.MeshSizeFactor", 1.5)
-        gmsh.model.mesh.generate(3)
-        mesh_path = target / "mesh.msh"
-        gmsh.write(str(mesh_path))
-        node_tags, _, _ = gmsh.model.mesh.getNodes()
-        _, element_tags, _ = gmsh.model.mesh.getElements(3)
-        element_count = sum(len(tags) for tags in element_tags)
-        if len(node_tags) <= 0 or element_count <= 0:
-            raise RuntimeError("quality smoke produced an empty 3-D mesh")
-    finally:
-        if initialized:
-            gmsh.finalize()
+    brep_path = _write_smoke_brep(target)
+    source_domain = PreparedDomain(
+        id="smoke",
+        role="synthetic",
+        material_ref="material:synthetic",
+        source_brep_file=brep_path.name,
+        source_brep_sha256=sha256(brep_path),
+        physical_group="domain/smoke",
+    )
+    mesh_path = target / "mesh.msh"
+    mapped_domains, node_count, element_count = _gmsh_mesh(
+        target,
+        mesh_path,
+        (source_domain,),
+    )
 
     manifest = PrepManifest(
         asset_id="quality.smoke",
@@ -56,22 +71,14 @@ def main() -> int:
         source_asset_sha256="1" * 64,
         source_gate_sha256="2" * 64,
         mesh_topology="independent-volume-import",
-        domains=(
-            PreparedDomain(
-                id="smoke",
-                role="synthetic",
-                material_ref="material:synthetic",
-                source_brep_file="synthetic-smoke.brep",
-                source_brep_sha256="3" * 64,
-                physical_group="domain/smoke",
-                gmsh_volume_tags=(volume,),
-            ),
-        ),
+        mesh_construction="isolated-domain-discrete-assembly",
+        mesh_algorithm="hxt",
+        domains=mapped_domains,
         mesh_file="mesh.msh",
         mesh_sha256=sha256(mesh_path),
         mesh_format="msh4.1",
         mesh_coordinate_unit="mm",
-        node_count=len(node_tags),
+        node_count=node_count,
         volume_element_count=element_count,
     )
     (target / "simulation-prep.json").write_text(
