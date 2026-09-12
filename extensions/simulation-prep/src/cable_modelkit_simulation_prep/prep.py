@@ -47,6 +47,8 @@ class PrepManifest(Contract):
     domains: Annotated[tuple[PreparedDomain, ...], Field(min_length=1, max_length=4096)]
     mesh_file: RelativePath | None = None
     mesh_sha256: Sha256Text | None = None
+    mesh_format: Literal["msh4.1"] | None = None
+    mesh_coordinate_unit: Literal["mm"] | None = None
     node_count: Annotated[int, Field(strict=True, ge=0)] = 0
     volume_element_count: Annotated[int, Field(strict=True, ge=0)] = 0
     fem_ready: Literal[False] = False
@@ -56,6 +58,7 @@ class PrepManifest(Contract):
     notes: tuple[str, ...] = (
         "Physical Groups preserve domain identity only.",
         "Independent imported volumes may carry duplicate interface nodes/faces.",
+        "Gmsh coordinates inherit Core B-rep millimeters; no implicit SI rescaling is performed.",
         "No conformal topology, element-quality, solver, material, or boundary-condition qualification is implied.",
     )
 
@@ -181,9 +184,8 @@ def _gmsh_mesh(source: Path, target: Path, domains: tuple[PreparedDomain, ...]) 
             mapped.append(domain.model_copy(update={"gmsh_volume_tags": tags}))
 
         gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
-        # This is a plumbing mesh, not a production discretization. A larger
-        # global size factor limits CI cost while geometric boundaries still
-        # constrain the actual local mesh where necessary.
+        # Core B-rep exchange uses millimeters. Gmsh imports those coordinates
+        # verbatim; ``PrepManifest.mesh_coordinate_unit`` records that boundary.
         gmsh.option.setNumber("Mesh.MeshSizeFactor", 2.0)
         gmsh.model.mesh.generate(3)
         gmsh.write(str(target))
@@ -250,6 +252,8 @@ def prepare_bundle(
     try:
         mesh_file = None
         mesh_sha256 = None
+        mesh_format = None
+        mesh_coordinate_unit = None
         node_count = 0
         volume_element_count = 0
         mesh_topology: Literal["not_generated", "independent-volume-import"] = "not_generated"
@@ -263,6 +267,8 @@ def prepare_bundle(
                 _meshio_verify(mesh_path, {domain.physical_group for domain in domains})
             mesh_file = "mesh.msh"
             mesh_sha256 = _sha256(mesh_path)
+            mesh_format = "msh4.1"
+            mesh_coordinate_unit = "mm"
             mesh_topology = "independent-volume-import"
 
         manifest = PrepManifest(
@@ -274,6 +280,8 @@ def prepare_bundle(
             domains=mapped_domains,
             mesh_file=mesh_file,
             mesh_sha256=mesh_sha256,
+            mesh_format=mesh_format,
+            mesh_coordinate_unit=mesh_coordinate_unit,
             node_count=node_count,
             volume_element_count=volume_element_count,
         )
@@ -305,8 +313,12 @@ def verify_prepared_bundle(root: str | Path) -> PrepManifest:
         mesh_path = base / manifest.mesh_file
         if not mesh_path.is_file() or manifest.mesh_sha256 is None:
             raise ValueError("prepared mesh file/hash is incomplete")
+        if manifest.mesh_format != "msh4.1" or manifest.mesh_coordinate_unit != "mm":
+            raise ValueError("prepared mesh format/unit contract is incomplete")
         if _sha256(mesh_path) != manifest.mesh_sha256:
             raise ValueError("prepared mesh hash mismatch")
         if manifest.node_count <= 0 or manifest.volume_element_count <= 0:
             raise ValueError("prepared mesh counts are not positive")
+    elif manifest.mesh_format is not None or manifest.mesh_coordinate_unit is not None:
+        raise ValueError("mesh format/unit must be absent when no mesh is generated")
     return manifest
