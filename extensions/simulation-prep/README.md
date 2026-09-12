@@ -8,6 +8,8 @@ The package accepts only bundles containing both `asset.json` and a passed `gate
 
 Every B-rep domain is mapped to a stable Gmsh Physical Group named `domain/<domain-id>`. When `--mesh` is enabled, each B-rep is imported as an independent Gmsh 3-D volume and a coarse plumbing mesh is generated. `--verify-mesh` additionally re-reads the `.msh` file with meshio and confirms the expected Physical Groups survived exchange.
 
+The mesh contract explicitly records `mesh_format = "msh4.1"` and `mesh_coordinate_unit = "mm"`. This is intentional: Core B-rep/STEP exchange is millimeter-based and Gmsh imports those coordinates verbatim. Downstream solvers that use SI units must perform and document an explicit conversion rather than silently assuming meters.
+
 This deliberately preserves the current topology boundary: **independent imported volumes are not proof of conformal shared topology**. Coincident interfaces can therefore carry duplicate faces/nodes until a later topology/mesh layer explicitly fragments/imprints and verifies them.
 
 ## Qualification boundary
