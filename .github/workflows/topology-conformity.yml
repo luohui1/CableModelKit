@@ -65,9 +65,10 @@ jobs:
           assert len(d['interfaces'])==3; assert all(x['shared_surface_node_count']>0 for x in d['interfaces']);
           assert d['source_topology']=='coincident-unmerged'; assert d['output_topology']=='fragmented-shared';
           assert d['conformal_shared_topology'] is True; assert d['mesh_format']=='msh4.1';
-          assert d['mesh_coordinate_unit']=='mm'; assert d['fem_ready'] is False;
-          assert d['simulation_ready'] is False; assert d['manufacturing_ready'] is False;
-          print('shared topology proven without upgrading FEM/simulation readiness')"
+          assert d['mesh_coordinate_unit']=='mm'; assert d['mesh_algorithm']=='hxt'; assert d['mesh_threads']==1;
+          assert d['fem_ready'] is False; assert d['simulation_ready'] is False;
+          assert d['manufacturing_ready'] is False;
+          print('shared topology proven with single-threaded HXT and without upgrading FEM/simulation readiness')"
 
       - uses: actions/upload-artifact@v4
         if: always()
