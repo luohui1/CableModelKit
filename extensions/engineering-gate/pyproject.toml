@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-engineering-gate"
+version = "0.1.0"
+description = "Scoped geometry-domain acceptance gate for CableModelKit"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cable-modelkit>=0.2.1,<0.3",
+  "cable-modelkit-section-profile>=0.1,<0.2",
+  "pydantic==2.13.4",
+  "trimesh>=4.5,<5"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
+[project.scripts]
+cable-modelkit-gate = "cable_modelkit_engineering_gate.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
