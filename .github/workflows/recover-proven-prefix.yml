@@ -28,12 +28,29 @@ jobs:
           python tools/extract_proven_prefix.py \
             --dest build/proven-prefix \
             --manifest build/proven-prefix-manifest.json
-      - name: Materialize recovered files
+      - name: Materialize recovered non-workflow files
         run: |
+          mkdir -p recovery/proven-workflows
+          cp -a build/proven-prefix/.github/workflows/. recovery/proven-workflows/
           cp -a build/proven-prefix/. ./
+
+          # The Actions token can write repository contents but GitHub refuses
+          # workflow-file updates from this token class. Keep byte-exact copies
+          # under recovery/proven-workflows; they are promoted separately through
+          # the authenticated GitHub repository connector.
+          rm -f \
+            .github/workflows/open-reference.yml \
+            .github/workflows/engineering-gate.yml \
+            .github/workflows/runtime-link.yml \
+            .github/workflows/ci.yml \
+            .github/workflows/mesh-quality.yml \
+            .github/workflows/mesh-bridge.yml \
+            .github/workflows/product-baseline.yml \
+            .github/workflows/reference-factory.yml
+
           mkdir -p docs
           mv build/proven-prefix-manifest.json docs/PROVEN_PREFIX_MANIFEST.json
-          rm -rf build
+          rm -rf build tools/__pycache__
       - name: Commit proven recovery baseline
         run: |
           git config user.name "github-actions[bot]"
