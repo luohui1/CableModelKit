@@ -1,0 +1,71 @@
+name: Apply native mesh gate fix
+
+on:
+  push:
+    branches:
+      - 'reconstruction/reference-factory-0.7a2'
+    paths:
+      - '.github/native-mesh-fix.json.gz.b64'
+      - '.github/workflows/apply-native-mesh-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode and verify staged source replacements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import gzip
+          import hashlib
+          import json
+
+          root = Path.cwd().resolve()
+          encoded = Path('.github/native-mesh-fix.json.gz.b64').read_text(encoding='utf-8').strip()
+          payload = json.loads(gzip.decompress(base64.b64decode(encoded)).decode('utf-8'))
+          expected = {
+              'extensions/simulation-prep/src/cable_modelkit_simulation_prep/prep.py': '0f9e5913e5cdcd4ada902104ad9e3d85384a22a1d5167eee006c4b69c9caeb99',
+              'extensions/simulation-prep/tests/test_simulation_prep.py': '1b37a7d3390aec808385e3388ffaea0501a1bd422349da34d6e270c94490b94d',
+              '.github/workflows/mesh-bridge.yml': '3da4bc44d0868ce9bc5887cb0f0c41fb0fb1ac9c8b1f31ce6562f2a653578206',
+              'extensions/topology-conformity/src/cable_modelkit_topology_conformity/conformity.py': '217ffa8dab15bb30f01668420cbfa9c18fd96c5bfb1f5dc913f005769c6e1987',
+              'extensions/topology-conformity/tests/test_topology_conformity.py': 'bb3434baebb45ed188d208ee1e5e1ae64ebad58561c1eb05930594914d098ca9',
+              '.github/workflows/topology-conformity.yml': 'c10f20e1746ddc5880b0d9b1145f98cbf53f524c0d13b1153e554f6cfdeedd8e',
+          }
+          if set(payload) != set(expected):
+              raise SystemExit(f'payload path mismatch: {sorted(payload)}')
+          for relative, content in payload.items():
+              if not isinstance(relative, str) or not isinstance(content, str):
+                  raise SystemExit('payload must map relative paths to UTF-8 text')
+              target = (root / relative).resolve()
+              if root not in target.parents:
+                  raise SystemExit(f'unsafe payload path: {relative}')
+              digest = hashlib.sha256(content.encode('utf-8')).hexdigest()
+              if digest != expected[relative]:
+                  raise SystemExit(f'payload digest mismatch for {relative}: {digest}')
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content, encoding='utf-8')
+          PY
+          python -m py_compile \
+            extensions/simulation-prep/src/cable_modelkit_simulation_prep/prep.py \
+            extensions/simulation-prep/tests/test_simulation_prep.py \
+            extensions/topology-conformity/src/cable_modelkit_topology_conformity/conformity.py \
+            extensions/topology-conformity/tests/test_topology_conformity.py
+          git diff --check
+
+      - name: Commit fail-closed native meshing repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/native-mesh-fix.json.gz.b64 .github/workflows/apply-native-mesh-fix.yml
+          git add -A
+          git commit -m 'fix(mesh): isolate nonconformal domains and pin HXT'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
