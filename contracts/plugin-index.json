@@ -1,0 +1,22 @@
+{
+  "api_version": "1.0",
+  "modelkit_version": "0.2.1",
+  "plugin_ids": [
+    "cable.multicore",
+    "cable.round",
+    "environment.layered_box",
+    "installation.cable_group",
+    "installation.channel",
+    "installation.duct_bank",
+    "installation.ladder_tray",
+    "installation.pipe_bend",
+    "installation.tube"
+  ],
+  "qualification": {
+    "fem_ready": false,
+    "historical_byte_identity": false,
+    "manufacturing_ready": false,
+    "standards_compliance": "not_assessed"
+  },
+  "schema_version": "reconstruction-0.1"
+}
