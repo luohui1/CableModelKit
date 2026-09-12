@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "EvidenceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Notes",
+          "type": "string"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Scope",
+          "type": "array"
+        },
+        "source_type": {
+          "enum": [
+            "manufacturer_drawing",
+            "manufacturer_catalog",
+            "user_dimensions",
+            "synthetic_demo"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "unverified",
+            "verified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_type",
+        "scope"
+      ],
+      "title": "EvidenceRecord",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "assumptions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 64,
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "baseline_id": {
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+      "title": "Baseline Id",
+      "type": "string"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceRecord"
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "title": "Evidence",
+      "type": "array"
+    },
+    "fem_ready": {
+      "const": false,
+      "default": false,
+      "title": "Fem Ready",
+      "type": "boolean"
+    },
+    "manufacturer": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Manufacturer"
+    },
+    "manufacturing_ready": {
+      "const": false,
+      "default": false,
+      "title": "Manufacturing Ready",
+      "type": "boolean"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Parameters",
+      "type": "object"
+    },
+    "plugin_id": {
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}$",
+      "title": "Plugin Id",
+      "type": "string"
+    },
+    "product_code": {
+      "anyOf": [
+        {
+          "maxLength": 160,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Product Code"
+    },
+    "schema_version": {
+      "const": "0.1",
+      "default": "0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "standards_compliance": {
+      "const": "not_assessed",
+      "default": "not_assessed",
+      "title": "Standards Compliance",
+      "type": "string"
+    }
+  },
+  "required": [
+    "baseline_id",
+    "plugin_id",
+    "parameters",
+    "evidence"
+  ],
+  "title": "ProductBaseline",
+  "type": "object"
+}
