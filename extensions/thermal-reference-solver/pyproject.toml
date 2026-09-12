@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-thermal-reference-solver"
+version = "0.1.0"
+description = "Controlled radial FEM reference solver and convergence evidence for CableModelKit"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cable-modelkit>=0.2.1,<0.3",
+  "cable-modelkit-thermal-contract>=0.1.0,<0.2",
+  "pydantic==2.13.4"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
+[project.scripts]
+cable-modelkit-thermal-reference = "cable_modelkit_thermal_reference_solver.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

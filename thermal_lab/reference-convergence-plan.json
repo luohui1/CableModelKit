@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "plan_id": "radial.reference-convergence.v1",
+  "benchmark_id": "radial.synthetic.v1",
+  "cells_per_layer_levels": [2, 4, 8, 16],
+  "max_energy_balance_error": 1e-8,
+  "min_observed_order": 1.8,
+  "max_observed_order": 2.2,
+  "max_finest_temperature_error_K": 0.0001,
+  "gci_safety_factor": 1.25,
+  "note": "Controlled constant-ratio radial refinement plan for the synthetic analytic benchmark only."
+}

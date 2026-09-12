@@ -1,0 +1,129 @@
+name: Thermal radial FEM reference and convergence proof
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extensions/thermal-reference-solver/**'
+      - 'extensions/thermal-contract/**'
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'thermal_lab/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/thermal-reference-solver.yml'
+  pull_request:
+    paths:
+      - 'extensions/thermal-reference-solver/**'
+      - 'extensions/thermal-contract/**'
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'thermal_lab/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/thermal-reference-solver.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install native runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+
+      - name: Install geometry-to-reference-solver stack
+        run: >-
+          python -m pip install
+          -e '.[occt]'
+          -e extensions/section-profile
+          -e extensions/engineering-gate
+          -e 'extensions/topology-conformity[mesh,verify]'
+          -e extensions/thermal-contract
+          -e 'extensions/thermal-reference-solver[test]'
+
+      - name: Build retained conformal and SI thermal evidence
+        run: |
+          python mesh_lab/make_test_fixture.py out/ci-source
+          cable-modelkit-topology build out/ci-source/candidate out/conformal
+          cable-modelkit-thermal-contract prepare \
+            out/conformal \
+            thermal_lab/radial-benchmark.json \
+            out/thermal-contract
+
+      - name: Test reference solver and convergence contracts
+        env:
+          MODELKIT_REFERENCE_THERMAL_SOURCE: '${{ github.workspace }}/out/thermal-contract'
+          MODELKIT_REFERENCE_CONVERGENCE_PLAN: '${{ github.workspace }}/thermal_lab/reference-convergence-plan.json'
+        run: >-
+          python scripts/run_pytest_ci.py -q
+          extensions/thermal-reference-solver/tests
+          --junitxml=out/thermal-reference-tests.xml
+
+      - name: Produce retained radial FEM evidence
+        run: >-
+          cable-modelkit-thermal-reference solve
+          out/thermal-contract
+          out/reference-solver
+          --cells-per-layer 16,16,16,16
+          --max-temperature-error-k 0.0001
+          --max-energy-balance-error 1e-8
+
+      - name: Independently verify retained radial FEM evidence
+        run: cable-modelkit-thermal-reference verify out/reference-solver
+
+      - name: Produce retained fixed-ratio convergence evidence
+        run: >-
+          cable-modelkit-thermal-reference converge
+          out/thermal-contract
+          thermal_lab/reference-convergence-plan.json
+          out/reference-convergence
+
+      - name: Independently verify retained convergence evidence
+        run: cable-modelkit-thermal-reference verify-convergence out/reference-convergence
+
+      - name: Pin reference-only qualification boundary
+        run: >-
+          python -c "import json; from pathlib import Path;
+          s=json.loads(Path('out/reference-solver/reference-solver.json').read_text(encoding='utf-8'));
+          c=json.loads(Path('out/reference-convergence/reference-convergence.json').read_text(encoding='utf-8'));
+          assert s['status']=='reference_solver_passed';
+          assert s['solver']['method']=='axisymmetric-linear-galerkin-fem';
+          assert s['radial_element_count']==64 and s['degrees_of_freedom']==65;
+          assert s['max_abs_temperature_error_K']<0.0001;
+          assert s['relative_energy_balance_error']<1e-8;
+          assert s['reference_solver_adapter_ready'] is True;
+          assert s['production_solver_adapter_ready'] is False;
+          assert c['status']=='reference_mesh_convergence_passed';
+          assert c['refinement_ratio']==2.0 and len(c['levels'])==4;
+          assert all(1.8<=x<=2.2 for x in c['observed_max_error_orders']);
+          assert 1.8<=c['observed_center_solution_order']<=2.2;
+          assert c['levels'][-1]['max_abs_temperature_error_K']<0.0001;
+          assert c['fine_grid_gci_relative']<1e-6;
+          assert c['reference_mesh_convergence_ready'] is True;
+          assert c['production_mesh_convergence_ready'] is False;
+          assert c['general_3d_fem_ready'] is False;
+          assert c['fem_ready'] is False and c['simulation_ready'] is False;
+          assert c['manufacturing_ready'] is False;
+          assert c['standards_compliance']=='not_assessed';
+          print('radial reference FEM and convergence passed without production/FEM overclaim')"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thermal-reference-solver-evidence
+          path: out/
