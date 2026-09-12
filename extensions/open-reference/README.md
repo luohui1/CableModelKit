@@ -12,9 +12,14 @@ An `OpenReferenceRecord` binds:
 - explicit geometry parameters,
 - one or more public sources with license metadata,
 - every scalar/list parameter leaf to at least one source via JSON Pointer,
+- a SHA-256 content digest for every source that actually supports a geometry parameter,
 - assumptions and conservative qualification flags.
 
+A URL alone is not accepted as reproducible geometry evidence because its contents can change. Sources referenced by `parameter_evidence` therefore require `content_sha256`; an unbound context-only source may remain unhashed because it never enters the geometry provenance set.
+
 Compilation produces a `ProductBaseline` whose evidence type is `public_reference`. Because the exact Core 0.2.1 provenance enum predates that evidence type, Core build requests are intentionally mapped to `user_dimensions`; the complete source/license metadata stays in the upper-layer baseline rather than being misrepresented as a manufacturer drawing.
+
+A recorded content hash proves only that the cited bytes are stable. It does **not** establish engineering authority, standards compliance, applicability, dimensional correctness, or manufacturer approval. Those remain separate validation questions.
 
 All records retain:
 
