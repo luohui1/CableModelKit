@@ -34,6 +34,8 @@ def test_cad_only_preparation_preserves_conservative_boundary(tmp_path: Path) ->
     assert prepared.status == "prepared"
     assert len(prepared.domains) == 4
     assert prepared.mesh_topology == "not_generated"
+    assert prepared.mesh_construction == "not_generated"
+    assert prepared.mesh_algorithm == "not_generated"
     assert prepared.mesh_file is None
     assert prepared.mesh_format is None
     assert prepared.mesh_coordinate_unit is None
@@ -53,6 +55,8 @@ def test_native_gmsh_transfer_preserves_all_physical_groups_and_units(tmp_path: 
         verify_mesh=True,
     )
     assert prepared.mesh_topology == "independent-volume-import"
+    assert prepared.mesh_construction == "isolated-domain-discrete-assembly"
+    assert prepared.mesh_algorithm == "hxt"
     assert prepared.mesh_file == "mesh.msh"
     assert prepared.mesh_sha256 is not None
     assert prepared.mesh_format == "msh4.1"
@@ -66,9 +70,12 @@ def test_native_gmsh_transfer_preserves_all_physical_groups_and_units(tmp_path: 
         "domain/sheath",
     }
     assert all(len(domain.gmsh_volume_tags) == 1 for domain in prepared.domains)
+    assert len({domain.gmsh_volume_tags[0] for domain in prepared.domains}) == 4
     verified = verify_prepared_bundle(output)
     assert verified.mesh_sha256 == prepared.mesh_sha256
     assert verified.mesh_coordinate_unit == "mm"
+    assert verified.mesh_construction == "isolated-domain-discrete-assembly"
+    assert verified.mesh_algorithm == "hxt"
     assert verified.fem_ready is False
 
 

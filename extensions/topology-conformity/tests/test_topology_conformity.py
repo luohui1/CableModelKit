@@ -41,6 +41,8 @@ def test_boolean_fragments_prove_shared_surfaces_and_nodes(tmp_path: Path) -> No
     assert len(report.interfaces) == 3
     assert report.mesh_format == "msh4.1"
     assert report.mesh_coordinate_unit == "mm"
+    assert report.mesh_algorithm == "hxt"
+    assert report.mesh_threads == 1
     assert report.node_count > 0
     assert report.volume_element_count > 0
     assert report.conformal_shared_topology is True
@@ -58,6 +60,8 @@ def test_boolean_fragments_prove_shared_surfaces_and_nodes(tmp_path: Path) -> No
     }
     verified = verify_conformal_bundle(output)
     assert verified.mesh_sha256 == report.mesh_sha256
+    assert verified.mesh_algorithm == "hxt"
+    assert verified.mesh_threads == 1
     assert verified.conformal_shared_topology is True
 
 

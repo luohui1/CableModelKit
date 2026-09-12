@@ -1,9 +1,10 @@
 """Prepare an accepted CableModelKit domain bundle for meshing experiments.
 
 This layer deliberately preserves Core's ``coincident-unmerged`` topology.
-Each B-rep is imported as an independent Gmsh volume and assigned a stable
-Physical Group. That proves domain transfer, not conformal/shared topology or
-FEM readiness.
+Each B-rep is meshed in an isolated Gmsh model and copied into a single
+discrete aggregate model with stable Physical Groups. That proves domain
+transfer and mesh plumbing while intentionally retaining independent interface
+nodes/faces; it does not prove conformal topology or FEM readiness.
 """
 
 from __future__ import annotations
@@ -43,6 +44,8 @@ class PrepManifest(Contract):
     source_gate_sha256: Sha256Text
     source_topology: Literal["coincident-unmerged"] = "coincident-unmerged"
     mesh_topology: Literal["not_generated", "independent-volume-import"] = "not_generated"
+    mesh_construction: Literal["not_generated", "isolated-domain-discrete-assembly"] = "not_generated"
+    mesh_algorithm: Literal["not_generated", "hxt"] = "not_generated"
     conformal_shared_topology: Literal[False] = False
     domains: Annotated[tuple[PreparedDomain, ...], Field(min_length=1, max_length=4096)]
     mesh_file: RelativePath | None = None
@@ -57,7 +60,8 @@ class PrepManifest(Contract):
     standards_compliance: Literal["not_assessed"] = "not_assessed"
     notes: tuple[str, ...] = (
         "Physical Groups preserve domain identity only.",
-        "Independent imported volumes may carry duplicate interface nodes/faces.",
+        "Each domain is meshed in isolation and copied into one discrete aggregate mesh.",
+        "Independent imported volumes intentionally retain duplicate/non-shared interface nodes and faces.",
         "Gmsh coordinates inherit Core B-rep millimeters; no implicit SI rescaling is performed.",
         "No conformal topology, element-quality, solver, material, or boundary-condition qualification is implied.",
     )
@@ -149,6 +153,149 @@ def _prepared_domains(source: Path, domains: list[dict]) -> tuple[PreparedDomain
     return tuple(prepared)
 
 
+def _configure_native_mesher(gmsh) -> None:
+    """Pin deterministic native meshing options used by the retained evidence."""
+
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.option.setNumber("General.NumThreads", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads1D", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads2D", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads3D", 1)
+    gmsh.option.setNumber("Mesh.Algorithm3D", 10)  # HXT
+    gmsh.option.setNumber("Mesh.MeshSizeFactor", 2.0)
+    gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
+    gmsh.option.setNumber("Mesh.Binary", 0)
+
+
+def _collect_isolated_domain_mesh(gmsh, model_name: str, brep_path: Path) -> tuple[int, tuple[dict, ...]]:
+    """Mesh one B-rep without exposing Gmsh to coincident neighboring shells."""
+
+    gmsh.model.add(model_name)
+    imported = gmsh.model.occ.importShapes(str(brep_path), highestDimOnly=True)
+    volumes = [int(tag) for dim, tag in imported if dim == 3]
+    if len(volumes) != 1:
+        raise RuntimeError(f"isolated domain imported {len(volumes)} volume entities; exactly one is required")
+    gmsh.model.occ.synchronize()
+    gmsh.model.mesh.generate(3)
+
+    _, volume_element_tags, _ = gmsh.model.mesh.getElements(3, volumes[0])
+    if sum(len(tags) for tags in volume_element_tags) <= 0:
+        raise RuntimeError("isolated domain produced no 3-D mesh elements")
+
+    records: list[dict] = []
+    for dim, tag in sorted((int(dim), int(tag)) for dim, tag in gmsh.model.getEntities()):
+        boundaries = tuple(
+            (int(boundary_dim), int(boundary_tag))
+            for boundary_dim, boundary_tag in gmsh.model.getBoundary([(dim, tag)])
+        )
+        node_tags, coordinates, _ = gmsh.model.mesh.getNodes(dim, tag)
+        element_types, element_tags, element_node_tags = gmsh.model.mesh.getElements(dim, tag)
+        records.append(
+            {
+                "entity": (dim, tag),
+                "boundaries": boundaries,
+                "node_tags": tuple(int(value) for value in node_tags),
+                "coordinates": tuple(float(value) for value in coordinates),
+                "element_types": tuple(int(value) for value in element_types),
+                "element_tags": tuple(
+                    tuple(int(value) for value in block) for block in element_tags
+                ),
+                "element_node_tags": tuple(
+                    tuple(int(value) for value in block) for block in element_node_tags
+                ),
+            }
+        )
+    return volumes[0], tuple(records)
+
+
+def _assemble_discrete_mesh(
+    gmsh,
+    domain_meshes: tuple[tuple[PreparedDomain, int, tuple[dict, ...]], ...],
+) -> tuple[tuple[PreparedDomain, ...], int, int]:
+    """Copy isolated meshes into one non-conformal discrete Gmsh model."""
+
+    gmsh.model.add("cable-modelkit-prep")
+    next_entity_tag = {0: 1, 1: 1, 2: 1, 3: 1}
+    next_node_tag = 1
+    next_element_tag = 1
+    mapped_domains: list[PreparedDomain] = []
+
+    for physical_tag, (domain, source_volume_tag, records) in enumerate(domain_meshes, start=1):
+        entity_map: dict[tuple[int, int], int] = {}
+        for record in records:
+            dim, old_tag = record["entity"]
+            entity_map[(dim, old_tag)] = next_entity_tag[dim]
+            next_entity_tag[dim] += 1
+
+        node_map: dict[int, int] = {}
+        for record in records:
+            for old_node_tag in record["node_tags"]:
+                if old_node_tag not in node_map:
+                    node_map[old_node_tag] = next_node_tag
+                    next_node_tag += 1
+
+        for record in records:
+            dim, old_tag = record["entity"]
+            new_tag = entity_map[(dim, old_tag)]
+            mapped_boundary: list[int] = []
+            for boundary_dim, signed_boundary_tag in record["boundaries"]:
+                sign = -1 if signed_boundary_tag < 0 else 1
+                key = (boundary_dim, abs(signed_boundary_tag))
+                if key not in entity_map:
+                    raise RuntimeError(f"isolated mesh boundary entity is missing from copy map: {key}")
+                mapped_boundary.append(sign * entity_map[key])
+            gmsh.model.addDiscreteEntity(dim, new_tag, mapped_boundary)
+
+            old_nodes = record["node_tags"]
+            if old_nodes:
+                gmsh.model.mesh.addNodes(
+                    dim,
+                    new_tag,
+                    [node_map[tag] for tag in old_nodes],
+                    list(record["coordinates"]),
+                )
+
+            source_element_tags = record["element_tags"]
+            source_connectivity = record["element_node_tags"]
+            if record["element_types"]:
+                copied_element_tags: list[list[int]] = []
+                copied_connectivity: list[list[int]] = []
+                for tags, connectivity in zip(source_element_tags, source_connectivity, strict=True):
+                    new_tags = list(range(next_element_tag, next_element_tag + len(tags)))
+                    next_element_tag += len(tags)
+                    copied_element_tags.append(new_tags)
+                    copied_connectivity.append([node_map[tag] for tag in connectivity])
+                gmsh.model.mesh.addElements(
+                    dim,
+                    new_tag,
+                    list(record["element_types"]),
+                    copied_element_tags,
+                    copied_connectivity,
+                )
+
+        new_volume_tag = entity_map[(3, source_volume_tag)]
+        group = gmsh.model.addPhysicalGroup(3, [new_volume_tag], physical_tag)
+        gmsh.model.setPhysicalName(3, group, domain.physical_group)
+        mapped_domains.append(domain.model_copy(update={"gmsh_volume_tags": (new_volume_tag,)}))
+
+    node_tags, _, _ = gmsh.model.mesh.getNodes()
+    _, volume_element_tags, _ = gmsh.model.mesh.getElements(3)
+    volume_element_count = sum(len(tags) for tags in volume_element_tags)
+    if len(node_tags) <= 0 or volume_element_count <= 0:
+        raise RuntimeError("assembled discrete model contains no 3-D mesh entities")
+
+    names = {
+        gmsh.model.getPhysicalName(dim, tag)
+        for dim, tag in gmsh.model.getPhysicalGroups(3)
+    }
+    expected = {domain.physical_group for domain, _, _ in domain_meshes}
+    if names != expected:
+        raise RuntimeError(
+            f"Gmsh Physical Group mismatch: missing={sorted(expected - names)}, extra={sorted(names - expected)}"
+        )
+    return tuple(mapped_domains), len(node_tags), volume_element_count
+
+
 def _gmsh_mesh(source: Path, target: Path, domains: tuple[PreparedDomain, ...]) -> tuple[tuple[PreparedDomain, ...], int, int]:
     try:
         import gmsh  # type: ignore
@@ -159,53 +306,24 @@ def _gmsh_mesh(source: Path, target: Path, domains: tuple[PreparedDomain, ...]) 
     try:
         gmsh.initialize(["cmk-simulation-prep", "-v", "0"])
         initialized = True
-        gmsh.option.setNumber("General.Terminal", 0)
-        gmsh.model.add("cable-modelkit-prep")
+        _configure_native_mesher(gmsh)
 
-        imported_by_id: dict[str, tuple[int, ...]] = {}
-        for domain in domains:
-            dim_tags = gmsh.model.occ.importShapes(
-                str(source / domain.source_brep_file),
-                highestDimOnly=True,
+        isolated: list[tuple[PreparedDomain, int, tuple[dict, ...]]] = []
+        for index, domain in enumerate(domains):
+            volume_tag, records = _collect_isolated_domain_mesh(
+                gmsh,
+                f"cmk-domain-{index:04d}-{domain.id}",
+                source / domain.source_brep_file,
             )
-            tags = tuple(tag for dim, tag in dim_tags if dim == 3)
-            if len(tags) != 1:
-                raise RuntimeError(
-                    f"domain {domain.id} imported {len(tags)} volume entities; exactly one is required"
-                )
-            imported_by_id[domain.id] = tags
+            isolated.append((domain, volume_tag, records))
+            gmsh.model.remove()
 
-        gmsh.model.occ.synchronize()
-        mapped: list[PreparedDomain] = []
-        for domain in domains:
-            tags = imported_by_id[domain.id]
-            physical = gmsh.model.addPhysicalGroup(3, list(tags))
-            gmsh.model.setPhysicalName(3, physical, domain.physical_group)
-            mapped.append(domain.model_copy(update={"gmsh_volume_tags": tags}))
-
-        gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
-        # Core B-rep exchange uses millimeters. Gmsh imports those coordinates
-        # verbatim; ``PrepManifest.mesh_coordinate_unit`` records that boundary.
-        gmsh.option.setNumber("Mesh.MeshSizeFactor", 2.0)
-        gmsh.model.mesh.generate(3)
+        mapped, node_count, volume_element_count = _assemble_discrete_mesh(
+            gmsh,
+            tuple(isolated),
+        )
         gmsh.write(str(target))
-
-        node_tags, _, _ = gmsh.model.mesh.getNodes()
-        _, element_tags, _ = gmsh.model.mesh.getElements(3)
-        volume_element_count = sum(len(tags) for tags in element_tags)
-        if len(node_tags) <= 0 or volume_element_count <= 0:
-            raise RuntimeError("Gmsh produced no 3-D mesh entities")
-
-        names = {
-            gmsh.model.getPhysicalName(dim, tag)
-            for dim, tag in gmsh.model.getPhysicalGroups(3)
-        }
-        expected = {domain.physical_group for domain in domains}
-        if names != expected:
-            raise RuntimeError(
-                f"Gmsh Physical Group mismatch: missing={sorted(expected - names)}, extra={sorted(names - expected)}"
-            )
-        return tuple(mapped), len(node_tags), volume_element_count
+        return mapped, node_count, volume_element_count
     finally:
         if initialized:
             gmsh.finalize()
@@ -220,10 +338,29 @@ def _meshio_verify(mesh_path: Path, expected_groups: set[str]) -> None:
     mesh = meshio.read(mesh_path)
     if len(mesh.points) <= 0 or sum(len(block.data) for block in mesh.cells) <= 0:
         raise ValueError("independent meshio read found an empty mesh")
-    field_names = set(mesh.field_data)
-    missing = expected_groups - field_names
+
+    group_to_tag: dict[str, int] = {}
+    for name, raw in mesh.field_data.items():
+        values = list(raw)
+        if len(values) >= 2 and int(values[1]) == 3:
+            group_to_tag[str(name)] = int(values[0])
+    missing = expected_groups - set(group_to_tag)
     if missing:
         raise ValueError(f"independent meshio read lost Physical Groups: {sorted(missing)}")
+
+    physical_blocks = mesh.cell_data.get("gmsh:physical")
+    if physical_blocks is None or len(physical_blocks) != len(mesh.cells):
+        raise ValueError("independent meshio read lost cell-aligned Physical Group data")
+    used_volume_tags: set[int] = set()
+    for block, physical in zip(mesh.cells, physical_blocks, strict=True):
+        if block.type.startswith("tetra"):
+            used_volume_tags.update(int(value) for value in physical)
+    expected_volume_tags = {group_to_tag[name] for name in expected_groups}
+    if used_volume_tags != expected_volume_tags:
+        raise ValueError(
+            "independent mesh Physical Group usage mismatch: "
+            f"expected={sorted(expected_volume_tags)} actual={sorted(used_volume_tags)}"
+        )
 
 
 def prepare_bundle(
@@ -257,6 +394,8 @@ def prepare_bundle(
         node_count = 0
         volume_element_count = 0
         mesh_topology: Literal["not_generated", "independent-volume-import"] = "not_generated"
+        mesh_construction: Literal["not_generated", "isolated-domain-discrete-assembly"] = "not_generated"
+        mesh_algorithm: Literal["not_generated", "hxt"] = "not_generated"
         mapped_domains = domains
         if generate_mesh:
             mesh_path = staging / "mesh.msh"
@@ -270,6 +409,8 @@ def prepare_bundle(
             mesh_format = "msh4.1"
             mesh_coordinate_unit = "mm"
             mesh_topology = "independent-volume-import"
+            mesh_construction = "isolated-domain-discrete-assembly"
+            mesh_algorithm = "hxt"
 
         manifest = PrepManifest(
             asset_id=asset_id,
@@ -277,6 +418,8 @@ def prepare_bundle(
             source_asset_sha256=_sha256(source_path / "asset.json"),
             source_gate_sha256=_sha256(source_path / "gate.json"),
             mesh_topology=mesh_topology,
+            mesh_construction=mesh_construction,
+            mesh_algorithm=mesh_algorithm,
             domains=mapped_domains,
             mesh_file=mesh_file,
             mesh_sha256=mesh_sha256,
@@ -315,10 +458,19 @@ def verify_prepared_bundle(root: str | Path) -> PrepManifest:
             raise ValueError("prepared mesh file/hash is incomplete")
         if manifest.mesh_format != "msh4.1" or manifest.mesh_coordinate_unit != "mm":
             raise ValueError("prepared mesh format/unit contract is incomplete")
+        if manifest.mesh_construction != "isolated-domain-discrete-assembly":
+            raise ValueError("prepared mesh construction contract is incomplete")
+        if manifest.mesh_algorithm != "hxt":
+            raise ValueError("prepared mesh algorithm contract is incomplete")
         if _sha256(mesh_path) != manifest.mesh_sha256:
             raise ValueError("prepared mesh hash mismatch")
         if manifest.node_count <= 0 or manifest.volume_element_count <= 0:
             raise ValueError("prepared mesh counts are not positive")
-    elif manifest.mesh_format is not None or manifest.mesh_coordinate_unit is not None:
-        raise ValueError("mesh format/unit must be absent when no mesh is generated")
+    elif (
+        manifest.mesh_format is not None
+        or manifest.mesh_coordinate_unit is not None
+        or manifest.mesh_construction != "not_generated"
+        or manifest.mesh_algorithm != "not_generated"
+    ):
+        raise ValueError("mesh format/unit/construction/algorithm must be absent when no mesh is generated")
     return manifest

@@ -58,6 +58,8 @@ class TopologyConformityReport(Contract):
     mesh_sha256: Sha256Text
     mesh_format: Literal["msh4.1"] = "msh4.1"
     mesh_coordinate_unit: Literal["mm"] = "mm"
+    mesh_algorithm: Literal["hxt"] = "hxt"
+    mesh_threads: Literal[1] = 1
     node_count: Annotated[int, Field(strict=True, gt=0)]
     volume_element_count: Annotated[int, Field(strict=True, gt=0)]
     conformal_shared_topology: Literal[True] = True
@@ -67,6 +69,7 @@ class TopologyConformityReport(Contract):
     standards_compliance: Literal["not_assessed"] = "not_assessed"
     notes: tuple[str, ...] = (
         "BooleanFragments/imprinting and shared interface mesh nodes are proven for declared interfaces.",
+        "The retained proof mesh uses single-threaded Gmsh HXT tetrahedralization for reproducible CI evidence.",
         "Topology conformity alone does not qualify material properties, boundary conditions, mesh adequacy, or a solver.",
         "Coordinates remain millimeters; downstream SI solvers require explicit conversion.",
     )
@@ -172,6 +175,20 @@ def _meshio_verify(mesh_path: Path, expected_groups: set[str]) -> None:
         raise ValueError("meshio found an empty conformal mesh")
 
 
+def _configure_hxt_mesher(gmsh) -> None:
+    """Pin the native proof mesh to single-threaded HXT and ASCII MSH 4.1."""
+
+    gmsh.option.setNumber("General.Terminal", 0)
+    gmsh.option.setNumber("General.NumThreads", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads1D", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads2D", 1)
+    gmsh.option.setNumber("Mesh.MaxNumThreads3D", 1)
+    gmsh.option.setNumber("Mesh.Algorithm3D", 10)  # HXT
+    gmsh.option.setNumber("Mesh.MeshSizeFactor", 2.0)
+    gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
+    gmsh.option.setNumber("Mesh.Binary", 0)
+
+
 def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh: bool = True) -> TopologyConformityReport:
     """Fragment/imprint all domains and prove declared interfaces share mesh nodes."""
 
@@ -193,7 +210,7 @@ def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh:
     try:
         gmsh.initialize(["cmk-topology-conformity", "-v", "0"])
         initialized = True
-        gmsh.option.setNumber("General.Terminal", 0)
+        _configure_hxt_mesher(gmsh)
         gmsh.model.add("cable-modelkit-conformal")
 
         input_entities: list[tuple[int, int]] = []
@@ -261,8 +278,6 @@ def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh:
                 raise ValueError(f"declared interface did not become shared topology: {body_a}/{body_b}")
             interface_surfaces.append((str(body_a), str(body_b), shared))
 
-        gmsh.option.setNumber("Mesh.MshFileVersion", 4.1)
-        gmsh.option.setNumber("Mesh.MeshSizeFactor", 2.0)
         gmsh.model.mesh.generate(3)
 
         domain_nodes = {domain_id: _entity_nodes(gmsh, 3, tags) for domain_id, tags in mapped_tags.items()}
