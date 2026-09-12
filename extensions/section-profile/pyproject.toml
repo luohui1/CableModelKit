@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-section-profile"
+version = "0.1.0"
+description = "Explicit cross-section domain profiling plugin for CableModelKit"
+requires-python = ">=3.11,<3.14"
+dependencies = ["cable-modelkit>=0.2.1,<0.3", "pydantic==2.13.4"]
+
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
+[project.entry-points."cable_modelkit.plugins"]
+"cable.section_profile" = "cable_modelkit_section_profile:SectionProfilePlugin"
+
+[tool.setuptools.packages.find]
+where = ["src"]
