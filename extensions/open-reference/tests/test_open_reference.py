@@ -93,6 +93,29 @@ def test_non_leaf_binding_is_rejected() -> None:
         OpenReferenceRecord.model_validate(data)
 
 
+def test_parameter_supporting_source_requires_content_hash() -> None:
+    data = fixture()
+    data["sources"][0].pop("content_sha256")
+    with pytest.raises(ValidationError, match="require content_sha256"):
+        OpenReferenceRecord.model_validate(data)
+
+
+def test_unbound_informational_source_may_be_unhashed() -> None:
+    data = fixture()
+    data["sources"].append(
+        {
+            "id": "source.context",
+            "title": "Context-only fixture",
+            "locator": "https://example.invalid/cable-modelkit/context-only",
+            "license_id": "CC0-1.0",
+            "redistribution": "permitted",
+            "notes": "No parameter evidence points at this source.",
+        }
+    )
+    record = OpenReferenceRecord.model_validate(data)
+    assert record.sources[1].content_sha256 is None
+
+
 def test_compile_preserves_public_evidence_and_core_boundary() -> None:
     compiled = compile_open_reference(fixture())
     assert compiled.baseline.standards_compliance == "not_assessed"
