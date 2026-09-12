@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-simulation-prep"
+version = "0.1.0"
+description = "Conservative domain-to-mesh preparation layer for CableModelKit"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cable-modelkit>=0.2.1,<0.3",
+  "pydantic==2.13.4"
+]
+
+[project.optional-dependencies]
+mesh = ["gmsh==4.15.2"]
+verify = ["meshio>=5.3,<6"]
+test = ["pytest>=9,<10"]
+
+[project.scripts]
+cable-modelkit-prep = "cable_modelkit_simulation_prep.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
