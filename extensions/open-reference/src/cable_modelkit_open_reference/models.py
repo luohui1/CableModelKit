@@ -109,10 +109,13 @@ class OpenReferenceRecord(Contract):
 
         leaves = parameter_leaf_pointers(self.parameters)
         bound = set(pointers)
-        missing = leaves - bound
         extra = bound - leaves
-        if missing:
-            raise ValueError("missing public evidence for parameter leaves: " + ", ".join(sorted(missing)))
+        missing = leaves - bound
+        # Report structurally invalid/non-leaf bindings before downstream coverage gaps.
+        # That ordering points the caller to the root cause when one bad pointer both
+        # creates an extra binding and leaves a legitimate leaf uncovered.
         if extra:
             raise ValueError("parameter evidence points to non-leaf/unknown parameters: " + ", ".join(sorted(extra)))
+        if missing:
+            raise ValueError("missing public evidence for parameter leaves: " + ", ".join(sorted(missing)))
         return self
