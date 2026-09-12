@@ -13,6 +13,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from ._ci_process import preserve_code_and_bypass_native_finalizers
 from .engine import default_engine
 from .errors import ModelKitError
 
@@ -104,10 +105,11 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        return int(args.func(args))
+        code = int(args.func(args))
     except (ModelKitError, ValidationError, ValueError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 2
+        code = 2
+    return preserve_code_and_bypass_native_finalizers(code)
 
 
 if __name__ == "__main__":
