@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-open-reference"
+version = "0.1.0"
+description = "License-aware public reference evidence for CableModelKit geometry baselines"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cable-modelkit>=0.2.1,<0.3",
+  "cable-modelkit-product-baseline>=0.1,<0.2",
+  "pydantic==2.13.4",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
