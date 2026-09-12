@@ -25,3 +25,7 @@ Topology conformity is necessary for many multi-domain FEM workflows, but it is 
 - `standards_compliance = "not_assessed"`
 
 Material constitutive data, unit conversion into a solver model, boundary/initial conditions, mesh adequacy for a specific PDE, solver formulation and convergence, and standards validation remain separate gates.
+
+## Controlled mesh refinement
+
+`cable-modelkit-topology build --mesh-size-scale S` multiplies the geometry-derived HXT size interval by a finite scale in `[0.25, 4.0]`. The exact scale and resulting minimum/maximum sizes are recorded in `topology-conformity.json`, enabling auditable downstream tetrahedral convergence studies without changing geometry, domain identity, or qualification scope.

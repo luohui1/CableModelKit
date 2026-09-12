@@ -17,6 +17,12 @@ def parser() -> argparse.ArgumentParser:
     build.add_argument("source", type=Path)
     build.add_argument("output", type=Path)
     build.add_argument("--no-meshio-verify", action="store_true")
+    build.add_argument(
+        "--mesh-size-scale",
+        type=float,
+        default=1.0,
+        help="multiply the geometry-derived Gmsh size interval (0.25 to 4.0)",
+    )
     verify = sub.add_parser("verify", help="verify an emitted conformity bundle")
     verify.add_argument("bundle", type=Path)
     return root
@@ -30,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.source,
                 args.output,
                 verify_mesh=not args.no_meshio_verify,
+                mesh_size_scale=args.mesh_size_scale,
             )
         else:
             report = verify_conformal_bundle(args.bundle)

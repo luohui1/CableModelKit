@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.1",
+  "plan_id": "radial.tetra-convergence.v1",
+  "benchmark_id": "radial.synthetic.v1",
+  "expected_mesh_size_scales": [2.0, 1.4142135623730951, 1.0],
+  "max_finest_temperature_error_K": 0.1,
+  "max_finest_energy_balance_error": 1e-8,
+  "max_finest_linear_residual": 1e-8,
+  "min_observed_order": 0.4,
+  "max_observed_order": 3.5,
+  "max_fine_grid_gci_relative": 0.001,
+  "gci_safety_factor": 1.25,
+  "note": "Controlled conformal tetrahedral refinement plan for the synthetic radial benchmark only."
+}

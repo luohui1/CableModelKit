@@ -60,6 +60,9 @@ class TopologyConformityReport(Contract):
     mesh_coordinate_unit: Literal["mm"] = "mm"
     mesh_algorithm: Literal["hxt"] = "hxt"
     mesh_threads: Literal[1] = 1
+    mesh_size_scale: Annotated[float, Field(strict=True, ge=0.25, le=4.0)] = 1.0
+    mesh_size_min_mm: Annotated[float, Field(strict=True, gt=0.0)]
+    mesh_size_max_mm: Annotated[float, Field(strict=True, gt=0.0)]
     node_count: Annotated[int, Field(strict=True, gt=0)]
     volume_element_count: Annotated[int, Field(strict=True, gt=0)]
     conformal_shared_topology: Literal[True] = True
@@ -191,11 +194,18 @@ def _configure_hxt_mesher(gmsh) -> None:
     gmsh.option.setNumber("Mesh.Binary", 0)
 
 
-def _set_geometry_aware_mesh_sizes(gmsh, volume_tags: set[int]) -> tuple[float, float]:
+def _set_geometry_aware_mesh_sizes(
+    gmsh,
+    volume_tags: set[int],
+    *,
+    mesh_size_scale: float = 1.0,
+) -> tuple[float, float]:
     """Resolve a conservative size interval from the thinnest retained volume."""
 
     from math import isfinite, sqrt
 
+    if not isfinite(mesh_size_scale) or not 0.25 <= mesh_size_scale <= 4.0:
+        raise ValueError("mesh_size_scale must be finite and within [0.25, 4.0]")
     if not volume_tags:
         raise ValueError("cannot derive conformal mesh size without fragmented volumes")
 
@@ -230,17 +240,25 @@ def _set_geometry_aware_mesh_sizes(gmsh, volume_tags: set[int]) -> tuple[float, 
             "a dedicated meshing prescription is required"
         )
 
-    mesh_size_max = max(resolution_floor, min(0.8 * feature_size, diagonal / 20.0))
-    mesh_size_min = max(diagonal / 4000.0, 0.35 * mesh_size_max)
-    if mesh_size_min >= mesh_size_max:
-        mesh_size_min = 0.5 * mesh_size_max
+    base_mesh_size_max = max(resolution_floor, min(0.8 * feature_size, diagonal / 20.0))
+    base_mesh_size_min = max(diagonal / 4000.0, 0.35 * base_mesh_size_max)
+    if base_mesh_size_min >= base_mesh_size_max:
+        base_mesh_size_min = 0.5 * base_mesh_size_max
 
+    mesh_size_min = base_mesh_size_min * mesh_size_scale
+    mesh_size_max = base_mesh_size_max * mesh_size_scale
     gmsh.option.setNumber("Mesh.MeshSizeMin", mesh_size_min)
     gmsh.option.setNumber("Mesh.MeshSizeMax", mesh_size_max)
     return mesh_size_min, mesh_size_max
 
 
-def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh: bool = True) -> TopologyConformityReport:
+def build_conformal_mesh(
+    source: str | Path,
+    output: str | Path,
+    *,
+    verify_mesh: bool = True,
+    mesh_size_scale: float = 1.0,
+) -> TopologyConformityReport:
     """Fragment/imprint all domains and prove declared interfaces share mesh nodes."""
 
     source_path = Path(source).absolute()
@@ -329,7 +347,9 @@ def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh:
                 raise ValueError(f"declared interface did not become shared topology: {body_a}/{body_b}")
             interface_surfaces.append((str(body_a), str(body_b), shared))
 
-        _set_geometry_aware_mesh_sizes(gmsh, actual_volumes)
+        mesh_size_min_mm, mesh_size_max_mm = _set_geometry_aware_mesh_sizes(
+            gmsh, actual_volumes, mesh_size_scale=mesh_size_scale
+        )
         gmsh.model.mesh.generate(3)
 
         domain_nodes = {domain_id: _entity_nodes(gmsh, 3, tags) for domain_id, tags in mapped_tags.items()}
@@ -384,6 +404,9 @@ def build_conformal_mesh(source: str | Path, output: str | Path, *, verify_mesh:
             domains=tuple(conformal_domains),
             interfaces=tuple(proofs),
             mesh_sha256=_sha256(mesh_path),
+            mesh_size_scale=mesh_size_scale,
+            mesh_size_min_mm=mesh_size_min_mm,
+            mesh_size_max_mm=mesh_size_max_mm,
             node_count=len(node_tags),
             volume_element_count=element_count,
         )

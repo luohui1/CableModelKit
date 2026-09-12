@@ -1,0 +1,128 @@
+name: Conformal tetrahedral thermal FEM and convergence proof
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extensions/thermal-tetra-solver/**'
+      - 'extensions/thermal-contract/**'
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'thermal_lab/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/thermal-tetra-solver.yml'
+  pull_request:
+    paths:
+      - 'extensions/thermal-tetra-solver/**'
+      - 'extensions/thermal-contract/**'
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'thermal_lab/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/thermal-tetra-solver.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tetra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install native runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+
+      - name: Install geometry-to-tetra-solver stack
+        run: >-
+          python -m pip install
+          -e '.[occt]'
+          -e extensions/section-profile
+          -e extensions/engineering-gate
+          -e 'extensions/topology-conformity[mesh,verify]'
+          -e extensions/thermal-contract
+          -e 'extensions/thermal-tetra-solver[test]'
+
+      - name: Build engineering-gate source geometry
+        run: python mesh_lab/make_test_fixture.py out/ci-source
+
+      - name: Build coarse, medium, and fine conformal thermal contracts
+        run: |
+          cable-modelkit-topology build out/ci-source/candidate out/conformal-coarse --mesh-size-scale 2.0
+          cable-modelkit-thermal-contract prepare out/conformal-coarse thermal_lab/radial-benchmark.json out/thermal-coarse
+          cable-modelkit-topology build out/ci-source/candidate out/conformal-medium --mesh-size-scale 1.4142135623730951
+          cable-modelkit-thermal-contract prepare out/conformal-medium thermal_lab/radial-benchmark.json out/thermal-medium
+          cable-modelkit-topology build out/ci-source/candidate out/conformal-fine --mesh-size-scale 1.0
+          cable-modelkit-thermal-contract prepare out/conformal-fine thermal_lab/radial-benchmark.json out/thermal-fine
+
+      - name: Test strict MSH parsing, 3-D assembly, solve, and tamper checks
+        env:
+          MODELKIT_TETRA_THERMAL_SOURCE: '${{ github.workspace }}/out/thermal-fine'
+        run: >-
+          python scripts/run_pytest_ci.py -q
+          extensions/thermal-tetra-solver/tests
+          --junitxml=out/thermal-tetra-tests.xml
+
+      - name: Solve all retained tetrahedral levels
+        run: |
+          cable-modelkit-thermal-tetra solve out/thermal-coarse out/tetra-coarse --max-temperature-error-k 0.5 --max-energy-balance-error 1e-8 --max-linear-residual 1e-8
+          cable-modelkit-thermal-tetra solve out/thermal-medium out/tetra-medium --max-temperature-error-k 0.5 --max-energy-balance-error 1e-8 --max-linear-residual 1e-8
+          cable-modelkit-thermal-tetra solve out/thermal-fine out/tetra-fine --max-temperature-error-k 0.1 --max-energy-balance-error 1e-8 --max-linear-residual 1e-8
+
+      - name: Independently recompute and verify the fine solve
+        run: cable-modelkit-thermal-tetra verify out/tetra-fine
+
+      - name: Build retained tetrahedral convergence evidence
+        run: >-
+          cable-modelkit-thermal-tetra converge
+          thermal_lab/tetra-convergence-plan.json
+          out/tetra-convergence
+          out/tetra-coarse out/tetra-medium out/tetra-fine
+
+      - name: Independently verify convergence evidence
+        run: cable-modelkit-thermal-tetra verify-convergence out/tetra-convergence
+
+      - name: Pin the controlled three-dimensional qualification boundary
+        run: >-
+          python -c "import json; from pathlib import Path;
+          s=json.loads(Path('out/tetra-fine/tetra-solver.json').read_text(encoding='utf-8'));
+          c=json.loads(Path('out/tetra-convergence/tetra-convergence.json').read_text(encoding='utf-8'));
+          assert s['status']=='tetra_reference_solver_passed';
+          assert s['solver']['method']=='three-dimensional-linear-tetrahedral-galerkin-fem';
+          assert s['node_count']==s['degrees_of_freedom'];
+          assert s['tetrahedron_count']>s['node_count'];
+          assert s['max_abs_temperature_error_K']<0.1;
+          assert s['relative_energy_balance_error']<1e-8;
+          assert s['relative_linear_residual']<1e-8;
+          assert s['reference_tetra_solver_adapter_ready'] is True;
+          assert s['production_solver_adapter_ready'] is False;
+          assert c['status']=='tetra_reference_mesh_convergence_passed';
+          assert len(c['levels'])==3;
+          assert c['reference_tetra_mesh_convergence_ready'] is True;
+          assert c['production_mesh_convergence_ready'] is False;
+          assert c['fine_grid_gci_relative']<0.001;
+          assert c['general_3d_fem_ready'] is False;
+          assert c['fem_ready'] is False and c['simulation_ready'] is False;
+          assert c['manufacturing_ready'] is False;
+          assert c['standards_compliance']=='not_assessed';
+          print('conformal tetrahedral FEM and convergence passed without production/FEM overclaim')"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: thermal-tetra-solver-evidence
+          path: out/
