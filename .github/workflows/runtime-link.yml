@@ -1,0 +1,35 @@
+name: RuntimeLink (configured; not executed remotely)
+on:
+  workflow_dispatch:
+  push:
+    paths: ['extensions/runtime-link/**', 'runtime_lab/**', '.github/workflows/runtime-link.yml']
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+      - run: pip install ".[occt]" ./extensions/runtime-link pytest trimesh
+      - run: python -m pytest tests extensions/runtime-link/tests --import-mode=importlib --junitxml=out/tests.xml
+      - run: python -m runtime_lab.exercise out/integration
+      - run: node runtime_lab/test_client.mjs out/node out/integration/cache
+      - run: python -m runtime_lab.audit_exchange out/integration/exported out/exchange.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-${{ matrix.os }}-${{ matrix.python }}
+          path: out/

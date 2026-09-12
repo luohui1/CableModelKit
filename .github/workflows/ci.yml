@@ -1,0 +1,48 @@
+name: Geometry contracts and OCCT tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.12', '3.13']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install runtime and test dependencies
+        run: python -m pip install -e ".[occt,dev]"
+      - name: Install optional construction and material plugins
+        run: python -m pip install -e extensions/construction-detail -e extensions/construction-features -e extensions/material-library
+      - name: Check bytecode compilation
+        run: python -m compileall -q src examples/third_party_plugin
+      - name: Verify committed JSON contracts
+        run: python scripts/export_contracts.py --check
+      - name: Test real geometry and export round trips
+        run: python -m pytest -q tests extensions/construction-detail/tests extensions/construction-features/tests extensions/material-library/tests --junitxml=artifacts/junit.xml
+      - name: Install the independent extension
+        run: python -m pip install -e examples/third_party_plugin
+      - name: Verify an installed entry-point plugin
+        run: python scripts/test_installed_plugin.py
+      - name: Export sample asset
+        run: cable-modelkit build examples/round_cable.json --output artifacts/round_cable
+      - name: Batch-build and re-import one asset family
+        run: python scripts/build_catalogue.py --family channel --output artifacts/catalogue-sample
+      - name: Upload test reports and sample geometry
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modelkit-${{ matrix.os }}-py${{ matrix.python }}
+          path: artifacts/
