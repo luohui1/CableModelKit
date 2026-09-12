@@ -53,15 +53,16 @@ jobs:
       - name: Independently re-check preparation manifest
         run: cable-modelkit-prep verify out/prepared
 
-      - name: Pin conservative qualification boundary
+      - name: Pin unit and conservative qualification boundaries
         run: >-
           python -c "import json; from pathlib import Path;
           d=json.loads(Path('out/prepared/simulation-prep.json').read_text(encoding='utf-8'));
           assert len(d['domains'])==4; assert d['mesh_topology']=='independent-volume-import';
+          assert d['mesh_format']=='msh4.1'; assert d['mesh_coordinate_unit']=='mm';
           assert d['conformal_shared_topology'] is False; assert d['fem_ready'] is False;
           assert d['simulation_ready'] is False; assert d['manufacturing_ready'] is False;
           assert d['node_count']>0 and d['volume_element_count']>0;
-          print('simulation-prep domain transfer passed without FEM overclaim')"
+          print('simulation-prep transfer passed with explicit mm units and no FEM overclaim')"
 
       - uses: actions/upload-artifact@v4
         if: always()
