@@ -1,0 +1,75 @@
+{
+  "schema_version": "0.1",
+  "benchmark_id": "radial.synthetic.v1",
+  "qualification_mode": "benchmark",
+  "axial_axis": "z",
+  "radial_domain_order": ["conductor", "screen", "insulation", "sheath"],
+  "heated_domain_id": "conductor",
+  "outer_domain_id": "sheath",
+  "materials": [
+    {
+      "material_ref": "material:copper",
+      "model": "isotropic_constant",
+      "thermal_conductivity_W_mK": 100.0,
+      "reference_temperature_K": 293.15,
+      "valid_temperature_range_K": [273.15, 373.15],
+      "provenance": {
+        "source_type": "synthetic_benchmark",
+        "reference": "CableModelKit controlled radial thermal benchmark",
+        "revision": "1",
+        "verification": "benchmark_only",
+        "note": "Synthetic verification value; not project-qualified copper data."
+      },
+      "project_verified": false
+    },
+    {
+      "material_ref": "material:semicon",
+      "model": "isotropic_constant",
+      "thermal_conductivity_W_mK": 1.0,
+      "reference_temperature_K": 293.15,
+      "valid_temperature_range_K": [273.15, 373.15],
+      "provenance": {
+        "source_type": "synthetic_benchmark",
+        "reference": "CableModelKit controlled radial thermal benchmark",
+        "revision": "1",
+        "verification": "benchmark_only",
+        "note": "Synthetic verification value; not project-qualified semiconductive screen data."
+      },
+      "project_verified": false
+    },
+    {
+      "material_ref": "material:xlpe",
+      "model": "isotropic_constant",
+      "thermal_conductivity_W_mK": 0.5,
+      "reference_temperature_K": 293.15,
+      "valid_temperature_range_K": [273.15, 373.15],
+      "provenance": {
+        "source_type": "synthetic_benchmark",
+        "reference": "CableModelKit controlled radial thermal benchmark",
+        "revision": "1",
+        "verification": "benchmark_only",
+        "note": "Synthetic verification value; not project-qualified XLPE data."
+      },
+      "project_verified": false
+    },
+    {
+      "material_ref": "material:pe",
+      "model": "isotropic_constant",
+      "thermal_conductivity_W_mK": 0.4,
+      "reference_temperature_K": 293.15,
+      "valid_temperature_range_K": [273.15, 373.15],
+      "provenance": {
+        "source_type": "synthetic_benchmark",
+        "reference": "CableModelKit controlled radial thermal benchmark",
+        "revision": "1",
+        "verification": "benchmark_only",
+        "note": "Synthetic verification value; not project-qualified PE data."
+      },
+      "project_verified": false
+    }
+  ],
+  "volumetric_heat_source_W_m3": 100000.0,
+  "ambient_temperature_K": 293.15,
+  "convection_coefficient_W_m2K": 10.0,
+  "note": "Controlled analytic benchmark only; no manufacturer construction or ratings."
+}
