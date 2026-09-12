@@ -15,7 +15,7 @@ from pydantic import Field, model_validator
 
 from cable_modelkit.schema import Contract, Id
 
-ReferenceText = Annotated[str, Field(strict=True, min_length=1, max_length=1000)]
+ReferenceText = Annotated[str, Field(strict=True, min_length=1, max_length=500)]
 Sha256Text = Annotated[str, Field(strict=True, pattern=r"^[0-9a-f]{64}$")]
 JsonPointer = Annotated[
     str,
