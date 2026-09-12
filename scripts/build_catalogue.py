@@ -12,6 +12,8 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
+
+from cable_modelkit._ci_process import preserve_code_and_bypass_native_finalizers
 from cable_modelkit.engine import default_engine
 
 
@@ -115,4 +117,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(preserve_code_and_bypass_native_finalizers(main()))
