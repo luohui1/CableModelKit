@@ -28,26 +28,41 @@ jobs:
           python tools/assemble_damaged_bootstrap.py \
             --output build/bootstrap-damaged.tar.gz \
             --map build/bootstrap-damaged-map.json
-      - name: Install gzip recovery toolkit
+      - name: Install gzip recovery toolkits
         run: |
           sudo apt-get update
-          sudo apt-get install -y gzrt cpio
+          sudo apt-get install -y gzrt gztool cpio
           gzrecover -V
-      - name: Recover combined decompressed stream
+          gztool -h | head -n 8
+      - name: Recover with gzrecover
         shell: bash
         run: |
           set +e
-          gzrecover -v -o build/bootstrap.tar.recovered \
+          gzrecover -v -o build/bootstrap.tar.gzrecover \
             build/bootstrap-damaged.tar.gz \
             2> build/gzrecover-combined.log
           status=$?
           set -e
           echo "gzrecover combined exit status: $status"
-          test -f build/bootstrap.tar.recovered
+          test -f build/bootstrap.tar.gzrecover
           python tools/scan_recovered_tar.py \
-            build/bootstrap.tar.recovered \
-            --output build/bootstrap-suffix-scan.json
-      - name: Probe split recovery segments
+            build/bootstrap.tar.gzrecover \
+            --output build/gzrecover-scan.json
+      - name: Recover with gztool patch mode
+        shell: bash
+        run: |
+          set +e
+          gztool -pWb0 build/bootstrap-damaged.tar.gz \
+            > build/bootstrap.tar.gztool \
+            2> build/gztool-patch.log
+          status=$?
+          set -e
+          echo "gztool patch exit status: $status"
+          test -f build/bootstrap.tar.gztool
+          python tools/scan_recovered_tar.py \
+            build/bootstrap.tar.gztool \
+            --output build/gztool-scan.json
+      - name: Probe gzrecover split segments
         shell: bash
         run: |
           set +e
@@ -57,7 +72,6 @@ jobs:
           status=$?
           set -e
           echo "gzrecover split exit status: $status"
-          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort > build/file-inventory.txt
           mkdir -p build/split-scans
           shopt -s nullglob
           for f in build/split-recovered*; do
@@ -67,15 +81,19 @@ jobs:
                 --output "build/split-scans/${base}.json" || true
             fi
           done
+          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort > build/file-inventory.tmp
+          mv build/file-inventory.tmp build/file-inventory.txt
       - name: Summarize recovery signals
         shell: bash
         run: |
           echo '=== damaged stream ==='
           cat build/bootstrap-damaged-map.json
-          echo '=== gzrecover combined ==='
+          echo '=== gzrecover ==='
           cat build/gzrecover-combined.log
-          echo '=== structural TAR candidates ==='
-          cat build/bootstrap-suffix-scan.json
+          cat build/gzrecover-scan.json
+          echo '=== gztool patch mode ==='
+          cat build/gztool-patch.log
+          cat build/gztool-scan.json
           echo '=== recovered files ==='
           cat build/file-inventory.txt
       - uses: actions/upload-artifact@v4
@@ -85,7 +103,9 @@ jobs:
             build/bootstrap-damaged-map.json
             build/gzrecover-combined.log
             build/gzrecover-split.log
-            build/bootstrap-suffix-scan.json
+            build/gzrecover-scan.json
+            build/gztool-patch.log
+            build/gztool-scan.json
             build/split-scans/
             build/file-inventory.txt
           if-no-files-found: error
