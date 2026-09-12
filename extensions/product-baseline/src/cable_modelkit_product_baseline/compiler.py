@@ -40,16 +40,26 @@ def _select_provenance(evidence: tuple[EvidenceRecord, ...]) -> Provenance:
             source_type="synthetic_demo",
             notes="Synthetic product-baseline fixture; not manufacturer data.",
         )
+
     references = ", ".join(
         f"{item.id}:{item.reference or 'no-reference'}" for item in evidence
     )
+    has_public_reference = any(item.source_type == "public_reference" for item in evidence)
+    if has_public_reference:
+        note = (
+            "Evidence contains redistributable public references. Core 0.2.1 has no "
+            "public_reference provenance enum, so the build request is conservatively mapped "
+            "to user_dimensions; authoritative source/license detail remains in ProductBaseline."
+        )
+    else:
+        note = (
+            "ProductBaseline evidence is not a manufacturer drawing; mapped conservatively to "
+            "user_dimensions in Core 0.2.1 provenance."
+        )
     return Provenance(
         source_type="user_dimensions",
         reference=references[:500] or None,
-        notes=(
-            "ProductBaseline evidence is not a manufacturer drawing; mapped conservatively to "
-            "user_dimensions in Core 0.2.1 provenance."
-        ),
+        notes=note,
     )
 
 
