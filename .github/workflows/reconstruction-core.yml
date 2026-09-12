@@ -1,0 +1,74 @@
+name: Reconstruction Core gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - reconstruction/reference-factory-0.7a2
+    paths:
+      - "src/**"
+      - "tests/test_reconstructed_*.py"
+      - "examples/round_cable.json"
+      - "examples/multicore.json"
+      - "pyproject.toml"
+      - ".github/workflows/reconstruction-core.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/test_reconstructed_*.py"
+      - "examples/round_cable.json"
+      - "examples/multicore.json"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: CAD-free contracts / py${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install lightweight Core
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      - name: Compile reconstructed Core
+        run: python -m compileall -q src
+      - name: Run CAD-free reconstruction tests
+        run: python -m pytest -q tests/test_reconstructed_contracts.py
+      - name: Exercise documented CLI without CAD
+        run: |
+          cable-modelkit plugins
+          cable-modelkit validate examples/round_cable.json
+          cable-modelkit validate examples/multicore.json
+
+  occt:
+    name: OCCT geometry smoke / py3.13
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install fixed Core CAD stack
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[occt,dev]"
+      - name: Run real reconstructed geometry tests
+        run: python -m pytest -q tests/test_reconstructed_geometry.py --junitxml=artifacts/reconstruction-core.xml
+      - name: Exercise transactional STEP export
+        run: cable-modelkit build examples/round_cable.json --output artifacts/round-cable
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reconstruction-core-occt
+          path: artifacts/
