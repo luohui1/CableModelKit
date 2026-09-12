@@ -5,6 +5,9 @@ This helper deliberately stops before the first incomplete TAR entry. It never
 attempts to fill, synthesize, or resynchronize missing compressed bytes. The
 result is therefore suitable as a byte-exact recovery baseline, not as a full
 repository restore.
+
+The recovery branch uses this same deterministic extractor in CI so the
+materialized baseline can always be regenerated from the immutable bootstrap.
 """
 
 from __future__ import annotations
