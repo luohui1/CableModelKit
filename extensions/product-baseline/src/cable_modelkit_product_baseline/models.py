@@ -22,6 +22,7 @@ class EvidenceRecord(Contract):
     source_type: Literal[
         "manufacturer_drawing",
         "manufacturer_catalog",
+        "public_reference",
         "user_dimensions",
         "synthetic_demo",
     ]
@@ -35,8 +36,8 @@ class EvidenceRecord(Contract):
     def check_traceability(self) -> Self:
         if self.source_type == "manufacturer_drawing" and not (self.reference and self.revision):
             raise ValueError("manufacturer_drawing evidence requires reference and revision")
-        if self.source_type == "manufacturer_catalog" and not self.reference:
-            raise ValueError("manufacturer_catalog evidence requires reference")
+        if self.source_type in {"manufacturer_catalog", "public_reference"} and not self.reference:
+            raise ValueError(f"{self.source_type} evidence requires reference")
         if self.verification == "verified" and self.source_type != "synthetic_demo" and not self.reference:
             raise ValueError("verified external evidence requires a traceable reference")
         if len(self.scope) != len(set(self.scope)):
