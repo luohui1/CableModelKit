@@ -46,7 +46,7 @@ Observed archive segments on `main`:
 
 The commit chain proves `chunk-08` was committed directly after `chunk-03`; segments 04–07 were never present in this remote history.
 
-## Forensic run 2026-09-12
+## Exact prefix recovery
 
 GitHub Actions run `34667320962` executed `tools/bootstrap_forensics.py` successfully on Python 3.13.
 
@@ -56,23 +56,30 @@ Verified findings:
 - The prefix decodes to 18,000 compressed bytes and inflates to 74,580 bytes of TAR data.
 - 29 TAR entries are identifiable before the gap; 23 regular files are fully complete and byte-recoverable.
 - The last fully complete source file is `src/cable_modelkit/plugins/infrastructure.py`.
-- `src/cable_modelkit/plugins/duct_bank.py` begins in the proven prefix but is truncated by the missing compressed region and must not be restored as a complete file.
+- `src/cable_modelkit/plugins/duct_bank.py` begins after that boundary but cannot be promoted as exact historical source.
 - Logical segments **04–07** are missing, corresponding to 24,000 Base64 characters / 18,000 decoded compressed bytes under the established chunk convention.
 - `chunk-12` contains 17,996 Base64 characters although the 12→15 span convention calls for 18,000. This is a second independent anomaly: four Base64 characters (approximately three compressed bytes) are absent relative to the nominal grouping pattern.
 - Full archive restoration is therefore not currently safe.
 
-The forensic report was uploaded by the workflow as artifact `bootstrap-forensics` (artifact id `10289703105`).
+The exact prefix has been materialized on `recovery/proven-prefix`. Historical workflow files were promoted using their original Git blob objects rather than rewritten through CI.
 
 ## Proven complete prefix files
 
-The forensic parser established the following complete prefix boundary:
+The forensic parser established the following complete regular files:
 
-- repository workflows through `reference-factory.yml`
+- `.github/workflows/open-reference.yml`
+- `.github/workflows/engineering-gate.yml`
+- `.github/workflows/runtime-link.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/mesh-quality.yml`
+- `.github/workflows/mesh-bridge.yml`
+- `.github/workflows/product-baseline.yml`
+- `.github/workflows/reference-factory.yml`
 - `CONTRIBUTING.md`
 - `.gitattributes`
 - `LICENSE_STATUS.md`
 - `pyproject.toml`
-- original `README.md`
+- `README.md`
 - `SECURITY.md`
 - `src/cable_modelkit/py.typed`
 - `src/cable_modelkit/__init__.py`
@@ -84,21 +91,76 @@ The forensic parser established the following complete prefix boundary:
 - `src/cable_modelkit/plugins/__init__.py`
 - `src/cable_modelkit/plugins/infrastructure.py`
 
-The workflow inventory is authoritative for exact entry boundaries; no incomplete entry is promoted as recovered source.
+The manifest on `recovery/proven-prefix` is authoritative for exact sizes and SHA-256 values. No incomplete entry is included in that exact baseline.
 
-## Recovery policy
+## Suffix recovery investigation
 
-1. Never delete or rewrite `.bootstrap/source/*` on `main` until archive recovery is closed.
-2. Never recreate missing compressed bytes or source files from guesses and label them historical source.
-3. Recover all byte-provable complete files on a dedicated `recovery/proven-prefix` branch.
-4. Keep incomplete `duct_bank.py` out of the restored source tree.
-5. Continue searching for original segments 04–07 and the missing `chunk-12` tail bytes in preserved bundles, old workspaces or verified copies.
-6. Any best-effort DEFLATE resynchronization of the suffix must live in forensic tooling/output and must not be presented as exact source until file-level integrity is proven.
-7. Restore `reference-factory-v0.7.0a2` only after the target source state and commit identity are verified.
-8. Run the repository's recovered tests/CI before declaring the public recovery complete.
+The surviving chunks were also assembled into a damaged gzip stream without inserting synthetic padding. This stream is 101,700 bytes and has SHA-256 `3e882f0e2d9cf3ee95f4dedb0e20ec095304e618608a48638355067dac04d836`.
 
-## Branch policy
+### gzrecover and gztool
 
-- `main`: immutable bootstrap/recovery evidence baseline for now.
-- `engineering/reference-factory-0.7a2`: recovery tooling, documentation and continued engineering work.
-- `recovery/proven-prefix`: byte-exact files extracted from the verified contiguous archive prefix only.
+GitHub Actions suffix-forensics runs tested two independent recovery implementations:
+
+- `gzrecover 0.8`
+- `gztool 1.6.1` in patch mode
+
+Both produced exactly 473,488 bytes of decompressed output with SHA-256 `9c1d34c341b76e4ecb14ee995f0f606493fc1bc82ee6ef4a91d0d09493ce3889`.
+
+Both outputs contain the same 29 valid USTAR headers and the same 28 header+payload+next-header chains, all belonging to the already proven prefix. Neither tool found a new valid TAR chain after the damaged region.
+
+`src/cable_modelkit/plugins/duct_bank.py` is visible as a candidate TAR member with size 2,409 bytes and payload SHA-256 `4d39481fc5ff13242290cff5e5fe6068bfda188c871e2cbbe98a89c111ef0bae`, but its expected next TAR header is invalid. Because the recovered bytes may be influenced by damaged DEFLATE history, this file is **not** classified as byte-exact historical source and is not promoted to `recovery/proven-prefix`.
+
+### Raw DEFLATE resynchronization probe
+
+A conservative probe then scanned the fully contiguous post-anomaly compressed suffix:
+
+- source chunks: `chunk-15`, `chunk-18`, `chunk-21`, `chunk-24`
+- compressed bytes: 52,203
+- SHA-256: `ff6fcecf556639d3949e1618fe798b85c736a3883bb6e72fbefdc89d82e54f2b`
+
+The probe tested all eight possible bit phases and all byte starts as potential raw-DEFLATE block boundaries. Each potential start was decompressed with three deliberately different 32 KiB preset dictionaries. A candidate required long decompressed output, at least a 32 KiB dictionary-independent common suffix, and structurally valid TAR headers inside that converged region.
+
+Result: **0 candidates**.
+
+This does not constitute a mathematical proof that no specialist forensic technique could ever recover additional bytes, but together with the two standard recovery tools it closes the practical direct-resynchronization routes against the current remote evidence.
+
+Latest suffix-forensics run: `34667954296`.
+Latest suffix-forensics artifact: `10289589181`.
+
+## Current recovery boundary
+
+The exact historical recovery boundary remains **23 complete files** ending at `src/cable_modelkit/plugins/infrastructure.py`.
+
+No additional source file after that boundary has met the repository's byte-exact promotion standard.
+
+Exact completion of the historical 592-file tree now requires at least one external verified source not currently available here, such as:
+
+- original logical segments 04–07,
+- the missing tail of logical 12–14,
+- the previously preserved Git bundle,
+- an old workspace/clone containing commit `c91b0b6`, or
+- another independently verifiable copy of the original repository.
+
+## Engineering continuation policy
+
+Recovery and forward engineering are now separated explicitly:
+
+1. `main` remains the bootstrap evidence baseline and must not be rewritten while recovery is open.
+2. `recovery/proven-prefix` contains only byte-exact recovered historical files.
+3. `engineering/reference-factory-0.7a2` contains forensic tooling, documentation and recovery experiments.
+4. Forward reconstruction must occur on a separately named reconstruction branch derived from `recovery/proven-prefix`.
+5. Any newly implemented file is labeled reconstructed/new work and must never be represented as the original historical bytes.
+6. Reconstructed behavior should use the exact README, package metadata, workflow contracts, schemas and surviving APIs as acceptance evidence.
+7. The historical tag `reference-factory-v0.7.0a2` must not be recreated until the historical target itself is verified.
+
+## Next engineering objective
+
+With direct byte recovery exhausted to a strong practical level, the next productive step is provenance-preserving reconstruction of the missing engineering surface. Priority is driven by the recovered historical CI contracts:
+
+1. complete the missing Core/plugin API surface needed by the package CLI and build flows;
+2. restore a working `product-baseline` extension contract;
+3. restore `open-reference`;
+4. restore `reference-factory` and its Gmsh verification path;
+5. restore validation scripts/tests and then expand to the remaining engineering extensions.
+
+Each reconstructed subsystem must earn its way forward through the recovered historical workflows or equivalent explicit tests.
