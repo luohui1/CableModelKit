@@ -10,11 +10,13 @@ on:
       - "tools/bootstrap_forensics.py"
       - "tools/assemble_damaged_bootstrap.py"
       - "tools/scan_recovered_tar.py"
+      - "tools/probe_deflate_resync.py"
       - ".github/workflows/suffix-forensics.yml"
 
 jobs:
   salvage:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -62,6 +64,10 @@ jobs:
           python tools/scan_recovered_tar.py \
             build/bootstrap.tar.gztool \
             --output build/gztool-scan.json
+      - name: Probe intact raw-DEFLATE suffix
+        run: |
+          python tools/probe_deflate_resync.py \
+            --output build/deflate-resync.json
       - name: Probe gzrecover split segments
         shell: bash
         run: |
@@ -94,6 +100,8 @@ jobs:
           echo '=== gztool patch mode ==='
           cat build/gztool-patch.log
           cat build/gztool-scan.json
+          echo '=== raw DEFLATE resync ==='
+          cat build/deflate-resync.json
           echo '=== recovered files ==='
           cat build/file-inventory.txt
       - uses: actions/upload-artifact@v4
@@ -106,6 +114,7 @@ jobs:
             build/gzrecover-scan.json
             build/gztool-patch.log
             build/gztool-scan.json
+            build/deflate-resync.json
             build/split-scans/
             build/file-inventory.txt
           if-no-files-found: error
