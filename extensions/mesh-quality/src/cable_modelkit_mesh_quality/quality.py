@@ -1,8 +1,8 @@
 """Fail-closed geometric screening for prepared Gmsh meshes.
 
 The report is intentionally narrower than an FEM qualification. It checks
-finite first-order tetrahedral geometry, non-degeneracy, Physical Group usage,
-and consistency with the upstream simulation-prep manifest. Shape-quality
+finite tetrahedral geometry, non-degeneracy, Physical Group usage, actual MSH
+format, and consistency with the upstream simulation-prep manifest. Shape
 statistics are recorded but no arbitrary solver-specific aspect-ratio limit is
 promoted to an engineering certification.
 """
@@ -62,6 +62,65 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _assert_actual_msh41(mesh_path: Path) -> None:
+    header = mesh_path.read_bytes()[:96].decode("ascii", errors="ignore").replace("\r\n", "\n")
+    if not header.startswith("$MeshFormat\n4.1 "):
+        raise ValueError("mesh file bytes do not declare Gmsh MSH 4.1")
+
+
+def _tetra_quality_statistics(points, tetra) -> dict[str, float | int]:
+    """Return scale-independent tetra screening statistics or fail closed."""
+
+    import numpy as np
+
+    points = np.asarray(points, dtype=float)
+    tetra = np.asarray(tetra, dtype=np.int64)
+    if tetra.ndim != 2 or tetra.shape[1] != 4 or len(tetra) == 0:
+        raise ValueError("tetra connectivity must be an Nx4 array")
+    if np.any(tetra < 0) or np.any(tetra >= len(points)):
+        raise ValueError("tetrahedral connectivity references an invalid point index")
+
+    vertices = points[tetra, :3]
+    pair_index = np.asarray(((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)))
+    edges = vertices[:, pair_index[:, 1], :] - vertices[:, pair_index[:, 0], :]
+    lengths = np.linalg.norm(edges, axis=2)
+    minimum_edge = np.min(lengths, axis=1)
+    maximum_edge = np.max(lengths, axis=1)
+    zero_edge_mask = minimum_edge <= np.finfo(float).eps
+    zero_edge_count = int(np.count_nonzero(zero_edge_mask))
+    if zero_edge_count:
+        raise ValueError(f"mesh contains {zero_edge_count} tetrahedra with zero-length edges")
+
+    v1 = vertices[:, 1, :] - vertices[:, 0, :]
+    v2 = vertices[:, 2, :] - vertices[:, 0, :]
+    v3 = vertices[:, 3, :] - vertices[:, 0, :]
+    six_volume = np.abs(np.einsum("ij,ij->i", np.cross(v1, v2), v3))
+    volume = six_volume / 6.0
+    normalized = six_volume / np.power(maximum_edge, 3)
+    if not np.all(np.isfinite(volume)) or not np.all(np.isfinite(normalized)):
+        raise ValueError("mesh quality calculation produced non-finite tetrahedral metrics")
+    degenerate_mask = normalized <= DEGENERATE_NORMALIZED_SIX_VOLUME
+    degenerate_count = int(np.count_nonzero(degenerate_mask))
+    if degenerate_count:
+        raise ValueError(
+            f"mesh contains {degenerate_count} degenerate/nearly-degenerate tetrahedra at normalized threshold "
+            f"{DEGENERATE_NORMALIZED_SIX_VOLUME:g}"
+        )
+
+    edge_ratio = maximum_edge / minimum_edge
+    if not np.all(np.isfinite(edge_ratio)):
+        raise ValueError("mesh edge-ratio calculation produced non-finite values")
+    return {
+        "zero_edge_count": zero_edge_count,
+        "degenerate_count": degenerate_count,
+        "min_abs_volume": float(np.min(volume)),
+        "min_normalized_six_volume": float(np.min(normalized)),
+        "median_edge_ratio": float(np.median(edge_ratio)),
+        "p95_edge_ratio": float(np.percentile(edge_ratio, 95)),
+        "max_edge_ratio": float(np.max(edge_ratio)),
+    }
+
+
 def _mesh_data(prepared_root: Path):
     manifest = verify_prepared_bundle(prepared_root)
     if manifest.mesh_file is None or manifest.mesh_sha256 is None:
@@ -79,6 +138,7 @@ def _mesh_data(prepared_root: Path):
         raise RuntimeError(f"meshio unavailable: {exc}") from exc
 
     mesh_path = prepared_root / manifest.mesh_file
+    _assert_actual_msh41(mesh_path)
     mesh = meshio.read(mesh_path)
     return manifest, mesh_path, mesh
 
@@ -142,8 +202,6 @@ def analyze_prepared_bundle(prepared_root: str | Path) -> MeshQualityReport:
         raise ValueError(
             f"tetrahedron count differs from preparation evidence: {len(tetra)} != {manifest.volume_element_count}"
         )
-    if np.any(tetra < 0) or np.any(tetra >= len(points)):
-        raise ValueError("tetrahedral connectivity references an invalid point index")
 
     expected_tag_to_group = {group_to_tag[name]: name for name in expected_groups}
     used_tags = {int(value) for value in np.unique(physical_tags)}
@@ -155,37 +213,7 @@ def analyze_prepared_bundle(prepared_root: str | Path) -> MeshQualityReport:
     if unexpected_usage:
         raise ValueError(f"unexpected 3-D Physical Group tags in mesh: {sorted(unexpected_usage)}")
 
-    vertices = points[tetra, :3]
-    pair_index = np.asarray(((0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)))
-    edges = vertices[:, pair_index[:, 1], :] - vertices[:, pair_index[:, 0], :]
-    lengths = np.linalg.norm(edges, axis=2)
-    minimum_edge = np.min(lengths, axis=1)
-    maximum_edge = np.max(lengths, axis=1)
-    zero_edge_mask = minimum_edge <= np.finfo(float).eps
-    zero_edge_count = int(np.count_nonzero(zero_edge_mask))
-    if zero_edge_count:
-        raise ValueError(f"mesh contains {zero_edge_count} tetrahedra with zero-length edges")
-
-    v1 = vertices[:, 1, :] - vertices[:, 0, :]
-    v2 = vertices[:, 2, :] - vertices[:, 0, :]
-    v3 = vertices[:, 3, :] - vertices[:, 0, :]
-    six_volume = np.abs(np.einsum("ij,ij->i", np.cross(v1, v2), v3))
-    volume = six_volume / 6.0
-    normalized = six_volume / np.power(maximum_edge, 3)
-    if not np.all(np.isfinite(volume)) or not np.all(np.isfinite(normalized)):
-        raise ValueError("mesh quality calculation produced non-finite tetrahedral metrics")
-    degenerate_mask = normalized <= DEGENERATE_NORMALIZED_SIX_VOLUME
-    degenerate_count = int(np.count_nonzero(degenerate_mask))
-    if degenerate_count:
-        raise ValueError(
-            f"mesh contains {degenerate_count} degenerate/nearly-degenerate tetrahedra at normalized threshold "
-            f"{DEGENERATE_NORMALIZED_SIX_VOLUME:g}"
-        )
-
-    edge_ratio = maximum_edge / minimum_edge
-    if not np.all(np.isfinite(edge_ratio)):
-        raise ValueError("mesh edge-ratio calculation produced non-finite values")
-
+    stats = _tetra_quality_statistics(points, tetra)
     return MeshQualityReport(
         asset_id=manifest.asset_id,
         source_prep_sha256=_sha256(root / "simulation-prep.json"),
@@ -195,13 +223,13 @@ def analyze_prepared_bundle(prepared_root: str | Path) -> MeshQualityReport:
         expected_domain_count=len(expected_groups),
         used_domain_count=len(used_tags),
         nonfinite_point_count=nonfinite_point_count,
-        zero_edge_tetrahedron_count=zero_edge_count,
-        degenerate_tetrahedron_count=degenerate_count,
-        min_abs_tetra_volume_mm3=float(np.min(volume)),
-        min_normalized_six_volume=float(np.min(normalized)),
-        median_edge_ratio=float(np.median(edge_ratio)),
-        p95_edge_ratio=float(np.percentile(edge_ratio, 95)),
-        max_edge_ratio=float(np.max(edge_ratio)),
+        zero_edge_tetrahedron_count=int(stats["zero_edge_count"]),
+        degenerate_tetrahedron_count=int(stats["degenerate_count"]),
+        min_abs_tetra_volume_mm3=float(stats["min_abs_volume"]),
+        min_normalized_six_volume=float(stats["min_normalized_six_volume"]),
+        median_edge_ratio=float(stats["median_edge_ratio"]),
+        p95_edge_ratio=float(stats["p95_edge_ratio"]),
+        max_edge_ratio=float(stats["max_edge_ratio"]),
     )
 
 
