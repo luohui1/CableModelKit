@@ -55,6 +55,7 @@
           "enum": [
             "manufacturer_drawing",
             "manufacturer_catalog",
+            "public_reference",
             "user_dimensions",
             "synthetic_demo"
           ],
