@@ -118,4 +118,25 @@ class OpenReferenceRecord(Contract):
             raise ValueError("parameter evidence points to non-leaf/unknown parameters: " + ", ".join(sorted(extra)))
         if missing:
             raise ValueError("missing public evidence for parameter leaves: " + ", ".join(sorted(missing)))
+
+        # A mutable URL is not a reproducible geometry input. Sources that actually
+        # support one or more parameter leaves must therefore be content-addressed.
+        # Informational sources may remain unhashed because they never enter the
+        # geometry provenance set in ``compile_open_reference``.
+        supporting_source_ids = {
+            source_id
+            for binding in self.parameter_evidence
+            for source_id in binding.source_ids
+        }
+        sources_by_id = {source.id: source for source in self.sources}
+        unhashed = sorted(
+            source_id
+            for source_id in supporting_source_ids
+            if sources_by_id[source_id].content_sha256 is None
+        )
+        if unhashed:
+            raise ValueError(
+                "parameter-supporting public sources require content_sha256: "
+                + ", ".join(unhashed)
+            )
         return self
