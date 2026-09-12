@@ -1,0 +1,37 @@
+{
+  "api_version": "1.0",
+  "plugin_id": "cable.section_profile",
+  "parameters": {
+    "asset_id": "benchmark.profiled-19",
+    "length_m": 0.25,
+    "domains": [
+      {"id": "d01.conductor", "role": "conductor", "outer_radius_m": 0.0100, "material_ref": "material:copper"},
+      {"id": "d02.conductor_screen", "role": "conductor_screen", "outer_radius_m": 0.0106, "material_ref": "material:semicon"},
+      {"id": "d03.insulation.inner", "role": "insulation", "outer_radius_m": 0.0120, "material_ref": "material:xlpe"},
+      {"id": "d04.insulation.mid", "role": "insulation", "outer_radius_m": 0.0140, "material_ref": "material:xlpe"},
+      {"id": "d05.insulation.outer", "role": "insulation", "outer_radius_m": 0.0160, "material_ref": "material:xlpe"},
+      {"id": "d06.insulation_screen", "role": "insulation_screen", "outer_radius_m": 0.0167, "material_ref": "material:semicon"},
+      {"id": "d07.screen_bedding", "role": "bedding", "outer_radius_m": 0.0172, "material_ref": "material:polyester"},
+      {"id": "d08.metallic_screen.inner", "role": "metallic_screen", "outer_radius_m": 0.0177, "material_ref": "material:copper"},
+      {"id": "d09.metallic_screen.outer", "role": "metallic_screen", "outer_radius_m": 0.0182, "material_ref": "material:copper"},
+      {"id": "d10.water_block", "role": "water_block", "outer_radius_m": 0.0188, "material_ref": "material:water_blocking_tape"},
+      {"id": "d11.radial_barrier", "role": "radial_barrier", "outer_radius_m": 0.0194, "material_ref": "material:aluminium"},
+      {"id": "d12.inner_sheath", "role": "inner_sheath", "outer_radius_m": 0.0205, "material_ref": "material:pe"},
+      {"id": "d13.armour_bedding.inner", "role": "armour_bedding", "outer_radius_m": 0.0211, "material_ref": "material:polypropylene"},
+      {"id": "d14.armour.inner", "role": "armour_equivalent", "outer_radius_m": 0.0220, "material_ref": "material:steel"},
+      {"id": "d15.armour.mid", "role": "armour_equivalent", "outer_radius_m": 0.0230, "material_ref": "material:steel"},
+      {"id": "d16.armour.outer", "role": "armour_equivalent", "outer_radius_m": 0.0240, "material_ref": "material:steel"},
+      {"id": "d17.armour_bedding.outer", "role": "armour_bedding", "outer_radius_m": 0.0246, "material_ref": "material:polypropylene"},
+      {"id": "d18.moisture_barrier", "role": "moisture_barrier", "outer_radius_m": 0.0251, "material_ref": "material:aluminium"},
+      {"id": "d19.outer_sheath.inner", "role": "outer_sheath", "outer_radius_m": 0.0270, "material_ref": "material:pe"},
+      {"id": "d20.outer_sheath.mid", "role": "outer_sheath", "outer_radius_m": 0.0290, "material_ref": "material:pe"},
+      {"id": "d21.outer_sheath.outer", "role": "outer_sheath", "outer_radius_m": 0.0310, "material_ref": "material:pe"},
+      {"id": "d22.service_jacket", "role": "service_jacket", "outer_radius_m": 0.0320, "material_ref": "material:pe"}
+    ]
+  },
+  "outputs": ["step", "brep", "glb"],
+  "provenance": {
+    "source_type": "synthetic_demo",
+    "notes": "Synthetic 22-domain reconstruction acceptance fixture. Layer splitting is deliberately stress-oriented and is not a manufacturer construction."
+  }
+}
