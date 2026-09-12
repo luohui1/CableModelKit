@@ -2,8 +2,40 @@ name: Geometry contracts and OCCT tests
 
 on:
   push:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'schemas/**'
+      - 'pyproject.toml'
+      - 'scripts/export_contracts.py'
+      - 'scripts/run_pytest_ci.py'
+      - 'scripts/test_installed_plugin.py'
+      - 'scripts/build_catalogue.py'
+      - 'extensions/construction-detail/**'
+      - 'extensions/construction-features/**'
+      - 'extensions/material-library/**'
+      - '.github/workflows/ci.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'examples/**'
+      - 'schemas/**'
+      - 'pyproject.toml'
+      - 'scripts/export_contracts.py'
+      - 'scripts/run_pytest_ci.py'
+      - 'scripts/test_installed_plugin.py'
+      - 'scripts/build_catalogue.py'
+      - 'extensions/construction-detail/**'
+      - 'extensions/construction-features/**'
+      - 'extensions/material-library/**'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
