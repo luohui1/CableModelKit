@@ -1,10 +1,29 @@
 name: Optional product baseline alpha
+
 on:
   push:
+    paths:
+      - 'src/**'
+      - 'extensions/product-baseline/**'
+      - 'product_lab/**'
+      - 'pyproject.toml'
+      - '.github/workflows/product-baseline.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'extensions/product-baseline/**'
+      - 'product_lab/**'
+      - 'pyproject.toml'
+      - '.github/workflows/product-baseline.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
+
 jobs:
   baseline:
     runs-on: ubuntu-latest
