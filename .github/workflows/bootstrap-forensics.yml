@@ -8,6 +8,8 @@ on:
     paths:
       - ".bootstrap/source/**"
       - "tools/bootstrap_forensics.py"
+      - "tools/assemble_damaged_bootstrap.py"
+      - "tools/scan_recovered_tar.py"
       - ".github/workflows/bootstrap-forensics.yml"
 
 jobs:
@@ -27,4 +29,81 @@ jobs:
         with:
           name: bootstrap-forensics
           path: build/bootstrap-forensics.json
+          if-no-files-found: error
+
+  suffix-salvage:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Assemble surviving compressed stream
+        run: |
+          mkdir -p build
+          python tools/assemble_damaged_bootstrap.py \
+            --output build/bootstrap-damaged.tar.gz \
+            --map build/bootstrap-damaged-map.json
+      - name: Install gzip recovery toolkit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gzrt cpio
+          gzrecover -V
+      - name: Recover combined decompressed stream
+        shell: bash
+        run: |
+          set +e
+          gzrecover -v -o build/bootstrap.tar.recovered \
+            build/bootstrap-damaged.tar.gz \
+            2> build/gzrecover-combined.log
+          status=$?
+          set -e
+          echo "gzrecover combined exit status: $status"
+          test -f build/bootstrap.tar.recovered
+          python tools/scan_recovered_tar.py \
+            build/bootstrap.tar.recovered \
+            --output build/bootstrap-suffix-scan.json
+      - name: Probe split recovery segments
+        shell: bash
+        run: |
+          set +e
+          gzrecover -v -s -o build/split-recovered \
+            build/bootstrap-damaged.tar.gz \
+            2> build/gzrecover-split.log
+          status=$?
+          set -e
+          echo "gzrecover split exit status: $status"
+          find build -maxdepth 1 -type f -printf '%f %s bytes\n' | sort > build/file-inventory.txt
+          mkdir -p build/split-scans
+          shopt -s nullglob
+          for f in build/split-recovered*; do
+            if [ -f "$f" ]; then
+              base="$(basename "$f")"
+              python tools/scan_recovered_tar.py "$f" \
+                --output "build/split-scans/${base}.json" || true
+            fi
+          done
+      - name: Summarize recovery signals
+        shell: bash
+        run: |
+          echo '=== damaged stream ==='
+          cat build/bootstrap-damaged-map.json
+          echo '=== gzrecover combined ==='
+          cat build/gzrecover-combined.log
+          echo '=== structural TAR candidates ==='
+          cat build/bootstrap-suffix-scan.json
+          echo '=== recovered files ==='
+          cat build/file-inventory.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-suffix-forensics
+          path: |
+            build/bootstrap-damaged-map.json
+            build/gzrecover-combined.log
+            build/gzrecover-split.log
+            build/bootstrap-suffix-scan.json
+            build/split-scans/
+            build/file-inventory.txt
           if-no-files-found: error
