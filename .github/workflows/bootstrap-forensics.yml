@@ -1,0 +1,30 @@
+name: Bootstrap forensics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - engineering/reference-factory-0.7a2
+    paths:
+      - ".bootstrap/source/**"
+      - "tools/bootstrap_forensics.py"
+      - ".github/workflows/bootstrap-forensics.yml"
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Inspect recovery payload
+        run: |
+          python tools/bootstrap_forensics.py --output build/bootstrap-forensics.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bootstrap-forensics
+          path: build/bootstrap-forensics.json
+          if-no-files-found: error
