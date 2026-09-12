@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
-      CABLE_MODELKIT_CI_FAST_EXIT: ${{ runner.os == 'Windows' && '1' || '0' }}
+      CABLE_MODELKIT_CI_FAST_EXIT: ${{ matrix.os == 'windows-latest' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
