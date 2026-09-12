@@ -53,19 +53,30 @@ jobs:
                   raise SystemExit(f'payload digest mismatch for {relative}: {digest}')
               target.parent.mkdir(parents=True, exist_ok=True)
               target.write_text(content, encoding='utf-8')
+
+          for relative in (
+              'extensions/simulation-prep/src/cable_modelkit_simulation_prep/prep.py',
+              'extensions/simulation-prep/tests/test_simulation_prep.py',
+              'extensions/topology-conformity/src/cable_modelkit_topology_conformity/conformity.py',
+              'extensions/topology-conformity/tests/test_topology_conformity.py',
+          ):
+              source = Path(relative).read_text(encoding='utf-8')
+              compile(source, relative, 'exec')
           PY
-          python -m py_compile \
+          git diff --check
+
+      - name: Commit source repair without workflow mutation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git restore --source=HEAD -- \
+            .github/workflows/mesh-bridge.yml \
+            .github/workflows/topology-conformity.yml
+          git rm .github/native-mesh-fix.json.gz.b64
+          git add \
             extensions/simulation-prep/src/cable_modelkit_simulation_prep/prep.py \
             extensions/simulation-prep/tests/test_simulation_prep.py \
             extensions/topology-conformity/src/cable_modelkit_topology_conformity/conformity.py \
             extensions/topology-conformity/tests/test_topology_conformity.py
-          git diff --check
-
-      - name: Commit fail-closed native meshing repair
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/native-mesh-fix.json.gz.b64 .github/workflows/apply-native-mesh-fix.yml
-          git add -A
           git commit -m 'fix(mesh): isolate nonconformal domains and pin HXT'
           git push origin "HEAD:${GITHUB_REF_NAME}"
