@@ -1,0 +1,72 @@
+name: Fragmented topology conformity proof
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/topology-conformity.yml'
+  pull_request:
+    paths:
+      - 'extensions/topology-conformity/**'
+      - 'extensions/engineering-gate/**'
+      - 'extensions/section-profile/**'
+      - 'mesh_lab/**'
+      - '.github/workflows/topology-conformity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install native runtime dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1
+
+      - name: Install reconstructed geometry and topology stack
+        run: python -m pip install -e '.[occt]' -e extensions/section-profile -e extensions/engineering-gate -e 'extensions/topology-conformity[mesh,verify]' pytest
+
+      - name: Build an engineering-gate-passed source fixture
+        run: python mesh_lab/make_test_fixture.py out/ci-source
+
+      - name: Test BooleanFragments interface proofs
+        env:
+          MODELKIT_TOPOLOGY_SOURCE: '${{ github.workspace }}/out/ci-source/candidate'
+        run: python scripts/run_pytest_ci.py -q extensions/topology-conformity/tests --junitxml=out/topology-tests.xml
+
+      - name: Produce retained conformal-topology evidence
+        run: cable-modelkit-topology build out/ci-source/candidate out/conformal
+
+      - name: Independently re-check retained evidence
+        run: cable-modelkit-topology verify out/conformal
+
+      - name: Pin topology-only qualification boundary
+        run: >-
+          python -c "import json; from pathlib import Path;
+          d=json.loads(Path('out/conformal/topology-conformity.json').read_text(encoding='utf-8'));
+          assert d['status']=='topology_conformity_passed'; assert len(d['domains'])==4;
+          assert len(d['interfaces'])==3; assert all(x['shared_surface_node_count']>0 for x in d['interfaces']);
+          assert d['source_topology']=='coincident-unmerged'; assert d['output_topology']=='fragmented-shared';
+          assert d['conformal_shared_topology'] is True; assert d['mesh_format']=='msh4.1';
+          assert d['mesh_coordinate_unit']=='mm'; assert d['fem_ready'] is False;
+          assert d['simulation_ready'] is False; assert d['manufacturing_ready'] is False;
+          print('shared topology proven without upgrading FEM/simulation readiness')"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: topology-conformity-evidence
+          path: out/
