@@ -1,0 +1,22 @@
+{
+  "api_version": "1.0",
+  "plugin_id": "cable.multicore",
+  "parameters": {
+    "asset_id": "demo.multicore.3c",
+    "length_m": 1.0,
+    "core_count": 3,
+    "conductor_radius_m": 0.006,
+    "insulation_thickness_m": 0.004,
+    "core_gap_m": 0.001,
+    "sheath_thickness_m": 0.003,
+    "conductor_material_ref": "material:copper",
+    "insulation_material_ref": "material:xlpe",
+    "filler_material_ref": "material:filler",
+    "sheath_material_ref": "material:pe"
+  },
+  "outputs": ["step"],
+  "provenance": {
+    "source_type": "synthetic_demo",
+    "notes": "Reconstructed family fixture; not historical manufacturer data."
+  }
+}
