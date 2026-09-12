@@ -17,6 +17,10 @@ on:
       - 'mesh_lab/**'
       - '.github/workflows/mesh-bridge.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
