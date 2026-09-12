@@ -1,0 +1,47 @@
+name: Recover proven prefix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - recovery/proven-prefix
+    paths:
+      - "tools/extract_proven_prefix.py"
+      - "tools/bootstrap_forensics.py"
+      - ".github/workflows/recover-proven-prefix.yml"
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Extract byte-proven files
+        run: |
+          rm -rf build/proven-prefix build/proven-prefix-manifest.json
+          python tools/extract_proven_prefix.py \
+            --dest build/proven-prefix \
+            --manifest build/proven-prefix-manifest.json
+      - name: Materialize recovered files
+        run: |
+          cp -a build/proven-prefix/. ./
+          mkdir -p docs
+          mv build/proven-prefix-manifest.json docs/PROVEN_PREFIX_MANIFEST.json
+          rm -rf build
+      - name: Commit proven recovery baseline
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No recovery changes to commit."
+            exit 0
+          fi
+          git commit -m "recovery: materialize byte-proven source prefix"
+          git push origin HEAD:recovery/proven-prefix
