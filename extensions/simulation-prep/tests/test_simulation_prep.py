@@ -35,6 +35,8 @@ def test_cad_only_preparation_preserves_conservative_boundary(tmp_path: Path) ->
     assert len(prepared.domains) == 4
     assert prepared.mesh_topology == "not_generated"
     assert prepared.mesh_file is None
+    assert prepared.mesh_format is None
+    assert prepared.mesh_coordinate_unit is None
     assert prepared.conformal_shared_topology is False
     assert prepared.fem_ready is False
     assert prepared.simulation_ready is False
@@ -42,7 +44,7 @@ def test_cad_only_preparation_preserves_conservative_boundary(tmp_path: Path) ->
     assert checked == prepared
 
 
-def test_native_gmsh_transfer_preserves_all_physical_groups(tmp_path: Path) -> None:
+def test_native_gmsh_transfer_preserves_all_physical_groups_and_units(tmp_path: Path) -> None:
     output = tmp_path / "meshed"
     prepared = prepare_bundle(
         source_bundle(),
@@ -53,6 +55,8 @@ def test_native_gmsh_transfer_preserves_all_physical_groups(tmp_path: Path) -> N
     assert prepared.mesh_topology == "independent-volume-import"
     assert prepared.mesh_file == "mesh.msh"
     assert prepared.mesh_sha256 is not None
+    assert prepared.mesh_format == "msh4.1"
+    assert prepared.mesh_coordinate_unit == "mm"
     assert prepared.node_count > 0
     assert prepared.volume_element_count > 0
     assert {domain.physical_group for domain in prepared.domains} == {
@@ -64,6 +68,7 @@ def test_native_gmsh_transfer_preserves_all_physical_groups(tmp_path: Path) -> N
     assert all(len(domain.gmsh_volume_tags) == 1 for domain in prepared.domains)
     verified = verify_prepared_bundle(output)
     assert verified.mesh_sha256 == prepared.mesh_sha256
+    assert verified.mesh_coordinate_unit == "mm"
     assert verified.fem_ready is False
 
 
