@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cable-modelkit-mesh-quality"
+version = "0.1.0"
+description = "Fail-closed geometric mesh screening for CableModelKit"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "cable-modelkit>=0.2.1,<0.3",
+  "cable-modelkit-simulation-prep>=0.1,<0.2",
+  "pydantic==2.13.4"
+]
+
+[project.optional-dependencies]
+quality = ["numpy>=2,<3"]
+exchange = ["meshio>=5.3,<6", "gmsh==4.15.2"]
+test = ["pytest>=9,<10"]
+
+[project.scripts]
+cable-modelkit-mesh-quality = "cable_modelkit_mesh_quality.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
